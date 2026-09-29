@@ -18,6 +18,22 @@ navigation:
   title: 智能打印
   icon: printer
   order: 20
+pages:
+  - id: jobs
+    title: 打印任务
+    path: /jobs
+    order: 10
+    visible: true
+  - id: devices
+    title: 设备
+    path: /devices
+    order: 20
+    visible: true
+  - id: templates
+    title: 模板
+    path: /templates
+    order: 30
+    visible: true
 capabilities:
   consumes:
     - agent.run

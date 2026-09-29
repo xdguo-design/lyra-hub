@@ -18,6 +18,22 @@ navigation:
   title: 医院 AI
   icon: medicine-box
   order: 30
+pages:
+  - id: outpatient
+    title: 门诊
+    path: /outpatient
+    order: 10
+    visible: true
+  - id: charge
+    title: 门诊收费
+    path: /charge
+    order: 20
+    visible: true
+  - id: assistant
+    title: AI 助手
+    path: /assistant
+    order: 30
+    visible: true
 capabilities:
   consumes:
     - model.generate

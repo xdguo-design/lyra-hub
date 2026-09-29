@@ -63,6 +63,23 @@ class ApplicationPageConfigUpdate(BaseModel):
     default_launch_mode: Literal["workspace", "standalone"] | None = None
 
 
+class ApplicationPageItemConfig(BaseModel):
+    app_id: str
+    page_id: str
+    title: str
+    path: str
+    navigation_order: int
+    hidden: bool = False
+    visible_roles: list[str] = Field(default_factory=list)
+
+
+class ApplicationPageItemUpdate(BaseModel):
+    title: str | None = Field(default=None, max_length=120)
+    navigation_order: int | None = Field(default=None, ge=-10000, le=10000)
+    hidden: bool | None = None
+    visible_roles: list[str] | None = None
+
+
 class ManifestValidationRequest(BaseModel):
     manifest: dict[str, Any]
 

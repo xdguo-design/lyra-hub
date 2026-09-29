@@ -18,6 +18,27 @@ navigation:
   title: 小说工作台
   icon: book
   order: 10
+pages:
+  - id: writing
+    title: 写作
+    path: /writing
+    order: 10
+    visible: true
+  - id: characters
+    title: 人物
+    path: /characters
+    order: 20
+    visible: true
+  - id: world
+    title: 世界观
+    path: /world
+    order: 30
+    visible: true
+  - id: reader
+    title: Reader
+    path: /reader
+    order: 40
+    visible: true
 capabilities:
   consumes:
     - model.generate

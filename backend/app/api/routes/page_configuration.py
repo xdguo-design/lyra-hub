@@ -8,11 +8,14 @@ from sqlalchemy import select
 from app.domain.applications.models import (
     ApplicationPageConfig,
     ApplicationPageConfigUpdate,
+    ApplicationPageItemConfig,
+    ApplicationPageItemUpdate,
     ApplicationSummary,
 )
 from app.domain.applications.registry import ManifestRegistry
 from app.infrastructure.database import (
     ApplicationConfigRecord,
+    ApplicationPageItemRecord,
     ApplicationStateRecord,
     Database,
     record_audit,
@@ -162,3 +165,122 @@ def navigation(
                 )
             )
         return sorted(result, key=lambda item: (item.navigation_order, item.name))
+
+
+
+def _page_manifest(registry: ManifestRegistry, app_id: str) -> list[dict]:
+    application = registry.get(app_id)
+    if application is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Application not found")
+    pages = application.manifest.get("pages") or []
+    return [item for item in pages if isinstance(item, dict)]
+
+
+def _page_default(app_id: str, page: dict) -> ApplicationPageItemConfig:
+    return ApplicationPageItemConfig(
+        app_id=app_id,
+        page_id=str(page["id"]),
+        title=str(page["title"]),
+        path=str(page["path"]),
+        navigation_order=int(page.get("order", 100)),
+        hidden=not bool(page.get("visible", True)),
+        visible_roles=[str(item) for item in page.get("permissions", [])],
+    )
+
+
+def _effective_page(
+    default: ApplicationPageItemConfig,
+    record: ApplicationPageItemRecord | None,
+) -> ApplicationPageItemConfig:
+    if record is None:
+        return default
+    return default.model_copy(
+        update={
+            "title": record.title_override or default.title,
+            "navigation_order": (
+                record.navigation_order
+                if record.navigation_order is not None
+                else default.navigation_order
+            ),
+            "hidden": record.hidden,
+            "visible_roles": record.visible_roles,
+        }
+    )
+
+
+@router.get(
+    "/page-config/{app_id}/pages",
+    response_model=list[ApplicationPageItemConfig],
+)
+def list_application_pages(
+    app_id: str,
+    registry: ManifestRegistry = Depends(get_registry),
+    database: Database = Depends(get_database),
+) -> list[ApplicationPageItemConfig]:
+    defaults = [_page_default(app_id, item) for item in _page_manifest(registry, app_id)]
+    with database.session() as session:
+        records = {
+            item.page_id: item
+            for item in session.scalars(
+                select(ApplicationPageItemRecord).where(
+                    ApplicationPageItemRecord.app_id == app_id
+                )
+            ).all()
+        }
+        return sorted(
+            [_effective_page(item, records.get(item.page_id)) for item in defaults],
+            key=lambda item: (item.navigation_order, item.title),
+        )
+
+
+@router.patch(
+    "/page-config/{app_id}/pages/{page_id}",
+    response_model=ApplicationPageItemConfig,
+)
+def update_application_page(
+    app_id: str,
+    page_id: str,
+    request: ApplicationPageItemUpdate,
+    registry: ManifestRegistry = Depends(get_registry),
+    database: Database = Depends(get_database),
+) -> ApplicationPageItemConfig:
+    pages = {_page_default(app_id, item).page_id: _page_default(app_id, item) for item in _page_manifest(registry, app_id)}
+    default = pages.get(page_id)
+    if default is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Application page not found")
+
+    with database.session() as session:
+        record = session.get(ApplicationPageItemRecord, (app_id, page_id))
+        before = _effective_page(default, record)
+        if record is None:
+            record = ApplicationPageItemRecord(
+                app_id=app_id,
+                page_id=page_id,
+                hidden=default.hidden,
+                visible_roles_json=json.dumps(default.visible_roles, ensure_ascii=False),
+            )
+            session.add(record)
+
+        fields = request.model_fields_set
+        if "title" in fields:
+            record.title_override = request.title.strip() if request.title else None
+        if "navigation_order" in fields:
+            record.navigation_order = request.navigation_order
+        if "hidden" in fields and request.hidden is not None:
+            record.hidden = request.hidden
+        if "visible_roles" in fields:
+            roles = sorted({item.strip() for item in (request.visible_roles or []) if item.strip()})
+            record.visible_roles_json = json.dumps(roles, ensure_ascii=False)
+
+        after = _effective_page(default, record)
+        if before.model_dump() != after.model_dump():
+            record_audit(
+                session,
+                action="page-item-config.updated",
+                target_type="application-page",
+                target_id=f"{app_id}:{page_id}",
+                payload={"before": before.model_dump(), "after": after.model_dump()},
+            )
+        session.commit()
+        session.refresh(record)
+        return _effective_page(default, record)
