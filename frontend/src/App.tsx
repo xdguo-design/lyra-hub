@@ -30,6 +30,7 @@ import {
 } from "./api";
 import type {
   ApplicationDetail,
+  ApplicationLaunch,
   ApplicationPageConfig,
   ApplicationPageItemConfig,
   ApplicationSummary,
@@ -43,6 +44,7 @@ type View =
   | "overview"
   | "applications"
   | "application"
+  | "embedded"
   | "plugins"
   | "page-config"
   | "capabilities"
@@ -55,6 +57,7 @@ export function App() {
   const [applications, setApplications] = useState<ApplicationSummary[]>([]);
   const [navigationApps, setNavigationApps] = useState<ApplicationSummary[]>([]);
   const [selected, setSelected] = useState<ApplicationDetail | null>(null);
+  const [embeddedLaunch, setEmbeddedLaunch] = useState<ApplicationLaunch | null>(null);
   const [pageConfigs, setPageConfigs] = useState<ApplicationPageConfig[]>([]);
   const [pageItems, setPageItems] = useState<Record<string, ApplicationPageItemConfig[]>>({});
   const [capabilities, setCapabilities] = useState<CapabilityInfo[]>([]);
@@ -126,7 +129,15 @@ export function App() {
     setError("");
     try {
       const launchInfo = await launchApplication(appId);
-      window.open(launchInfo.url, "_blank", "noopener,noreferrer");
+      if (
+        launchInfo.integration_type === "iframe" &&
+        launchInfo.launch_mode === "workspace"
+      ) {
+        setEmbeddedLaunch(launchInfo);
+        setView("embedded");
+      } else {
+        window.open(launchInfo.url, "_blank", "noopener,noreferrer");
+      }
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "应用启动失败");
     } finally {
@@ -289,8 +300,10 @@ export function App() {
         ? "应用中心"
         : view === "application"
           ? selected?.name ?? "应用详情"
-          : view === "plugins"
-            ? "插件中心"
+          : view === "embedded"
+            ? "应用容器"
+            : view === "plugins"
+              ? "插件中心"
             : view === "page-config"
               ? "页面配置"
             : view === "capabilities"
@@ -389,6 +402,51 @@ export function App() {
         </header>
 
         {error && <div className="alert">{error}</div>}
+
+        {view === "embedded" && embeddedLaunch && (
+          <section className="embeddedWorkspace">
+            <div className="embeddedBar">
+              <div>
+                <div className="eyebrow">EMBEDDED APPLICATION</div>
+                <h3>
+                  {applications.find((item) => item.id === embeddedLaunch.app_id)?.name ??
+                    embeddedLaunch.app_id}
+                </h3>
+                <small>
+                  iframe · {embeddedLaunch.allowed_origins.join(", ")}
+                </small>
+              </div>
+              <div className="embeddedActions">
+                <button
+                  className="secondaryButton"
+                  onClick={() => void openDetail(embeddedLaunch.app_id)}
+                >
+                  返回应用详情
+                </button>
+                <button
+                  className="primaryButton"
+                  onClick={() =>
+                    window.open(
+                      embeddedLaunch.url,
+                      "_blank",
+                      "noopener,noreferrer",
+                    )
+                  }
+                >
+                  独立窗口打开
+                </button>
+              </div>
+            </div>
+            <div className="iframeFrame">
+              <iframe
+                src={embeddedLaunch.url}
+                title={embeddedLaunch.app_id}
+                sandbox="allow-forms allow-modals allow-popups allow-popups-to-escape-sandbox allow-same-origin allow-scripts allow-downloads"
+                referrerPolicy="strict-origin-when-cross-origin"
+              />
+            </div>
+          </section>
+        )}
 
         {view === "overview" && (
           <>

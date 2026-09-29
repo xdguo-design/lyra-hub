@@ -30,6 +30,7 @@ export type ApplicationLaunch = {
   integration_type: string;
   url: string;
   workspace_path: string;
+  allowed_origins: string[];
 };
 
 export type AuditEvent = {
