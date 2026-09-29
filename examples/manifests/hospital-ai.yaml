@@ -12,8 +12,10 @@ workspace:
   enabled: true
   path: /apps/hospital-ai
   integration:
-    type: external
+    type: iframe
     url: https://hospital-ai.example.com
+    allowedOrigins:
+      - https://hospital-ai.example.com
 navigation:
   title: 医院 AI
   icon: medicine-box

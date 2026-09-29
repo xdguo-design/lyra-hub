@@ -80,7 +80,9 @@ def test_enabled_application_can_launch(client: TestClient) -> None:
     payload = response.json()
     assert payload["app_id"] == "hospital-ai"
     assert payload["launch_mode"] == "workspace"
+    assert payload["integration_type"] == "iframe"
     assert payload["url"].startswith("https://")
+    assert payload["allowed_origins"] == ["https://hospital-ai.example.com"]
 
 
 def test_page_configuration_controls_order_visibility_roles_and_launch_mode(client: TestClient) -> None:

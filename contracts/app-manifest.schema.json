@@ -94,10 +94,31 @@
               "type": "array",
               "items": {
                 "type": "string"
-              }
+              },
+              "minItems": 1
             }
           },
-          "additionalProperties": false
+          "additionalProperties": false,
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "type": {
+                    "const": "iframe"
+                  }
+                },
+                "required": [
+                  "type"
+                ]
+              },
+              "then": {
+                "required": [
+                  "url",
+                  "allowedOrigins"
+                ]
+              }
+            }
+          ]
         }
       },
       "additionalProperties": false

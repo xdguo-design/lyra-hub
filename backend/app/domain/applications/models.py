@@ -42,6 +42,7 @@ class ApplicationLaunch(BaseModel):
     integration_type: str
     url: str
     workspace_path: str
+    allowed_origins: list[str] = Field(default_factory=list)
 
 
 class ApplicationPageConfig(BaseModel):

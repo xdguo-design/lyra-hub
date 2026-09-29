@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from urllib.parse import urlsplit
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -156,11 +158,25 @@ def launch_application(
             )
         effective = ApplicationDetail.model_validate(_apply_effective(application, state_record, config_record))
 
+    allowed_origins: list[str] = []
     if effective.default_launch_mode == "standalone":
         url = effective.standalone_url
     else:
         integration = effective.manifest["workspace"]["integration"]
         url = integration.get("url") or effective.standalone_url
+        if effective.integration_type == "iframe":
+            allowed_origins = [str(item).rstrip("/") for item in integration.get("allowedOrigins", [])]
+            parsed = urlsplit(url)
+            origin = f"{parsed.scheme}://{parsed.netloc}" if parsed.scheme and parsed.netloc else ""
+            if not allowed_origins or origin not in allowed_origins:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                    detail={
+                        "code": "iframe_origin_not_allowed",
+                        "origin": origin,
+                        "allowed_origins": allowed_origins,
+                    },
+                )
 
     return ApplicationLaunch(
         app_id=app_id,
@@ -168,4 +184,5 @@ def launch_application(
         integration_type=effective.integration_type,
         url=url,
         workspace_path=effective.workspace_path,
+        allowed_origins=allowed_origins,
     )
