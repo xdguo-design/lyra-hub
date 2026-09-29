@@ -34,7 +34,7 @@ def test_application_detail_exposes_capabilities(client: TestClient) -> None:
     assert response.status_code == 200
     payload = response.json()
     assert "model.generate" in payload["capabilities_consumed"]
-    assert payload["integration_type"] == "external"
+    assert payload["integration_type"] == "iframe"
 
 
 def test_unknown_application_returns_404(client: TestClient) -> None:
