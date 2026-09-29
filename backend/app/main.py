@@ -46,6 +46,7 @@ def create_app(
     api.dependency_overrides[page_configuration.get_registry] = lambda: registry
     api.dependency_overrides[page_configuration.get_database] = lambda: database
     api.dependency_overrides[capabilities.get_platform_services] = lambda: platform_services
+    api.dependency_overrides[capabilities.get_registry] = lambda: registry
     api.dependency_overrides[plugins.get_registry] = lambda: plugin_registry
     api.dependency_overrides[plugins.get_database] = lambda: database
 

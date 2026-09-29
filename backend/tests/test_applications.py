@@ -170,3 +170,15 @@ def test_gateway_and_agent_os_capabilities_are_invoked_through_hub(tmp_path) -> 
     assert agents.json()["result"]["items"][0]["id"] == "writer"
     assert generated.json()["result"]["choices"][0]["message"]["content"] == "ok"
     assert executed.json()["result"]["status"] == "succeeded"
+
+    dependencies = test_client.get("/api/v1/capability-dependencies")
+    assert dependencies.status_code == 200
+    items = dependencies.json()["data"]
+    by_key = {
+        (item["application_id"], item["capability"]): item
+        for item in items
+    }
+    assert by_key[("lyra-narrative", "model.generate")]["status"] == "available"
+    assert by_key[("lyra-narrative", "agent.run")]["status"] == "available"
+    assert by_key[("lyra-narrative", "workflow.run")]["status"] == "missing"
+    assert by_key[("hospital-ai", "knowledge.search")]["status"] == "missing"
