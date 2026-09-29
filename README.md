@@ -1,16 +1,41 @@
 # Lyra Hub
 
-Lyra Hub is the application hub for the Lyra AI platform.
+Lyra Hub is the AI application hub for the Lyra platform.
 
-It provides a unified workspace, application registry, plugin runtime, page configuration, permissions and shared capability access for independently deployable AI applications such as Narrative, Printing and Hospital AI.
+## Positioning
 
-## Platform boundary
+Lyra Hub is the unified application entrance, registry, configuration center and plugin container for independently deployable business AI applications.
 
-- **Lyra Hub** manages applications, workspace navigation, app/plugin registration and unified configuration.
-- **Lyra Agent OS** manages agents, skills, tools, workflows, memory and execution governance.
-- **Lyra Gateway** manages model providers, routing, quota, cost and model access.
-- **Business applications** own their own business logic, pages, data and deployment lifecycle.
+Current first-class applications:
 
-> Applications remain independently runnable and deployable. Hub integration is an additional mode, not a replacement for standalone operation.
+- Lyra Narrative — novel / content creation
+- Lyra Print — printing platform
+- Hospital AI — hospital AI applications
+- Future business AI applications
 
-Development work is performed on the `dev` branch before promotion to `main`.
+Platform boundaries:
+
+- Lyra Hub manages applications, navigation, app/plugin registration, page configuration, shared identity context and capability access.
+- Lyra Agent OS manages Agent, Skill, Tool, Workflow, Memory and execution governance.
+- Lyra Gateway manages model/provider access, routing, quota, cost and usage.
+- Business applications own their own domain logic, pages, data and deployment lifecycle.
+
+A business application MUST remain independently runnable. Joining Lyra Hub adds a second integrated mode; it MUST NOT make standalone operation depend on Hub.
+
+## Repository layout
+
+- frontend/ — Hub web workspace, React + TypeScript
+- backend/ — Hub control plane API, Python + FastAPI
+- contracts/ — App Manifest and integration contracts
+- examples/ — sample application manifests
+- docs/product/ — PRD and product decisions
+- docs/architecture/ — architecture and stack decisions
+- docs/ux/ — page and prototype specifications
+- prototypes/ — reviewable visual prototype assets
+
+## Branching
+
+- main — stable baseline
+- dev — active integration branch
+
+Development changes land on dev first and are promoted to main after regression verification.

@@ -1,0 +1,30 @@
+schemaVersion: "1.0"
+id: lyra-print
+name: 智能打印
+version: "0.3.0"
+type: application
+description: 独立打印平台
+category: productivity
+standalone:
+  enabled: true
+  url: https://print.example.com
+workspace:
+  enabled: true
+  path: /apps/printing
+  integration:
+    type: external
+    url: https://print.example.com
+navigation:
+  title: 智能打印
+  icon: printer
+  order: 20
+capabilities:
+  consumes:
+    - agent.run
+    - workflow.run
+    - file.read
+  provides:
+    - print.execute
+permissions:
+  - printing.read
+  - printing.operate

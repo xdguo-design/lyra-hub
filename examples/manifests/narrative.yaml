@@ -1,0 +1,29 @@
+schemaVersion: "1.0"
+id: lyra-narrative
+name: 小说工作台
+version: "0.1.0"
+type: application
+description: 小说与内容创作业务应用
+category: content
+standalone:
+  enabled: true
+  url: https://narrative.example.com
+workspace:
+  enabled: true
+  path: /apps/narrative
+  integration:
+    type: external
+    url: https://narrative.example.com
+navigation:
+  title: 小说工作台
+  icon: book
+  order: 10
+capabilities:
+  consumes:
+    - model.generate
+    - agent.run
+    - workflow.run
+    - file.read
+permissions:
+  - narrative.read
+  - narrative.write

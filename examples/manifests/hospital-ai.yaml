@@ -1,0 +1,28 @@
+schemaVersion: "1.0"
+id: hospital-ai
+name: 医院 AI
+version: "0.1.0"
+type: application
+description: 医院业务 AI 应用入口
+category: healthcare
+standalone:
+  enabled: true
+  url: https://hospital-ai.example.com
+workspace:
+  enabled: true
+  path: /apps/hospital-ai
+  integration:
+    type: external
+    url: https://hospital-ai.example.com
+navigation:
+  title: 医院 AI
+  icon: medicine-box
+  order: 30
+capabilities:
+  consumes:
+    - model.generate
+    - agent.run
+    - workflow.run
+    - knowledge.search
+permissions:
+  - hospital-ai.read

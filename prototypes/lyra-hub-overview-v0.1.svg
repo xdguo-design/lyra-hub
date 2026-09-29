@@ -1,0 +1,103 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1600 1000">
+  <defs>
+    <linearGradient id="hero" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0b1d3a"/>
+      <stop offset="1" stop-color="#142e57"/>
+    </linearGradient>
+    <linearGradient id="brand" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#4f7cff"/>
+      <stop offset="1" stop-color="#7a5cff"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="4" stdDeviation="10" flood-color="#12284b" flood-opacity=".10"/>
+    </filter>
+  </defs>
+  <rect width="1600" height="1000" fill="#f5f8fc"/>
+  <rect x="24" y="24" width="1552" height="72" rx="18" fill="#fff" filter="url(#shadow)"/>
+  <rect x="48" y="42" width="38" height="38" rx="12" fill="url(#brand)"/>
+  <text x="100" y="67" font-family="Arial,sans-serif" font-size="28" font-weight="700" fill="#13264a">Lyra Hub</text>
+  <text x="1275" y="66" font-family="Arial,sans-serif" font-size="15" fill="#60708d">PRD / Prototype v0.1</text>
+
+  <rect x="24" y="120" width="230" height="856" rx="20" fill="url(#hero)"/>
+  <text x="52" y="172" font-family="Arial,sans-serif" font-size="13" fill="#91a4c5">WORKSPACE</text>
+  <g font-family="Arial,sans-serif" font-size="18" fill="#dce7f8">
+    <text x="56" y="220">Overview</text>
+    <text x="56" y="270">Applications</text>
+    <text x="56" y="320">Plugins</text>
+    <text x="56" y="370">Page Config</text>
+    <text x="56" y="420">Capabilities</text>
+    <text x="56" y="470">Permissions</text>
+    <text x="56" y="520">Operations</text>
+    <text x="56" y="570">Settings</text>
+  </g>
+  <rect x="42" y="238" width="194" height="48" rx="12" fill="#203c68"/>
+
+  <text x="290" y="155" font-family="Arial,sans-serif" font-size="34" font-weight="700" fill="#14284d">AI 应用中枢</text>
+  <text x="290" y="188" font-family="Arial,sans-serif" font-size="16" fill="#677894">统一入口 · 应用注册 · 页面配置 · 能力共享 · 独立运行</text>
+
+  <rect x="290" y="220" width="1248" height="205" rx="22" fill="#fff" filter="url(#shadow)"/>
+  <text x="322" y="264" font-family="Arial,sans-serif" font-size="20" font-weight="700" fill="#18315d">我的应用</text>
+
+  <g font-family="Arial,sans-serif">
+    <rect x="322" y="292" width="350" height="104" rx="16" fill="#f8f3ff" stroke="#e7dbff"/>
+    <rect x="342" y="314" width="54" height="54" rx="14" fill="#7b61ff"/>
+    <text x="414" y="332" font-size="19" font-weight="700" fill="#1f2f4d">小说工作台</text>
+    <text x="414" y="358" font-size="14" fill="#6c7890">Narrative · 独立运行 + Hub 接入</text>
+    <text x="414" y="382" font-size="13" fill="#279565">● 正常</text>
+
+    <rect x="698" y="292" width="350" height="104" rx="16" fill="#eef8ff" stroke="#d2ebff"/>
+    <rect x="718" y="314" width="54" height="54" rx="14" fill="#3b8cff"/>
+    <text x="790" y="332" font-size="19" font-weight="700" fill="#1f2f4d">智能打印</text>
+    <text x="790" y="358" font-size="14" fill="#6c7890">Printing · Vue/React + Python</text>
+    <text x="790" y="382" font-size="13" fill="#279565">● 正常</text>
+
+    <rect x="1074" y="292" width="432" height="104" rx="16" fill="#f0fbf8" stroke="#d2f0e8"/>
+    <rect x="1094" y="314" width="54" height="54" rx="14" fill="#20b486"/>
+    <text x="1166" y="332" font-size="19" font-weight="700" fill="#1f2f4d">医院 AI</text>
+    <text x="1166" y="358" font-size="14" fill="#6c7890">Hospital AI · 门诊 / 知识 / 助手</text>
+    <text x="1166" y="382" font-size="13" fill="#d99316">● 待接入</text>
+  </g>
+
+  <rect x="290" y="454" width="760" height="250" rx="22" fill="#fff" filter="url(#shadow)"/>
+  <text x="322" y="498" font-family="Arial,sans-serif" font-size="20" font-weight="700" fill="#18315d">应用中心</text>
+  <rect x="322" y="520" width="696" height="44" rx="12" fill="#f6f8fb" stroke="#e1e7ef"/>
+  <text x="344" y="548" font-family="Arial,sans-serif" font-size="14" fill="#92a0b5">搜索应用 / 分类 / 状态</text>
+  <g font-family="Arial,sans-serif" font-size="14" fill="#31425e">
+    <rect x="322" y="586" width="212" height="84" rx="14" fill="#fafbfe" stroke="#e6eaf1"/>
+    <text x="344" y="618" font-size="16" font-weight="700">小说工作台</text>
+    <text x="344" y="644" fill="#6e7a91">已安装 · v0.1.0</text>
+    <rect x="550" y="586" width="212" height="84" rx="14" fill="#fafbfe" stroke="#e6eaf1"/>
+    <text x="572" y="618" font-size="16" font-weight="700">智能打印</text>
+    <text x="572" y="644" fill="#6e7a91">已安装 · v0.3.0</text>
+    <rect x="778" y="586" width="240" height="84" rx="14" fill="#fafbfe" stroke="#e6eaf1"/>
+    <text x="800" y="618" font-size="16" font-weight="700">医院 AI</text>
+    <text x="800" y="644" fill="#6e7a91">可接入 · v0.1.0</text>
+  </g>
+
+  <rect x="1080" y="454" width="458" height="250" rx="22" fill="#fff" filter="url(#shadow)"/>
+  <text x="1112" y="498" font-family="Arial,sans-serif" font-size="20" font-weight="700" fill="#18315d">平台状态</text>
+  <g font-family="Arial,sans-serif" font-size="15">
+    <text x="1112" y="546" fill="#40506d">Gateway</text><text x="1438" y="546" fill="#269965">正常</text>
+    <text x="1112" y="586" fill="#40506d">Agent OS</text><text x="1438" y="586" fill="#269965">正常</text>
+    <text x="1112" y="626" fill="#40506d">Applications</text><text x="1428" y="626" fill="#40506d">2 / 3</text>
+    <text x="1112" y="666" fill="#40506d">Manifest Errors</text><text x="1448" y="666" fill="#40506d">0</text>
+  </g>
+
+  <rect x="290" y="734" width="1248" height="210" rx="22" fill="#fff" filter="url(#shadow)"/>
+  <text x="322" y="778" font-family="Arial,sans-serif" font-size="20" font-weight="700" fill="#18315d">页面配置 / Workspace Designer</text>
+  <rect x="322" y="804" width="250" height="108" rx="14" fill="#f8fafc" stroke="#e3e8ef"/>
+  <text x="342" y="834" font-family="Arial,sans-serif" font-size="14" font-weight="700" fill="#344761">应用与页面树</text>
+  <text x="342" y="862" font-family="Arial,sans-serif" font-size="13" fill="#718198">小说工作台</text>
+  <text x="358" y="886" font-family="Arial,sans-serif" font-size="13" fill="#718198">写作 / 人物 / Reader</text>
+
+  <rect x="596" y="804" width="560" height="108" rx="14" fill="#f8fafc" stroke="#e3e8ef"/>
+  <text x="618" y="834" font-family="Arial,sans-serif" font-size="14" font-weight="700" fill="#344761">导航顺序与可见性</text>
+  <rect x="618" y="852" width="516" height="40" rx="10" fill="#fff" stroke="#e2e7ef"/>
+  <text x="636" y="877" font-family="Arial,sans-serif" font-size="13" fill="#5f708c">Reader   /reader             可见 ●     顺序 40</text>
+
+  <rect x="1180" y="804" width="326" height="108" rx="14" fill="#f8fafc" stroke="#e3e8ef"/>
+  <text x="1202" y="834" font-family="Arial,sans-serif" font-size="14" font-weight="700" fill="#344761">属性</text>
+  <text x="1202" y="862" font-family="Arial,sans-serif" font-size="13" fill="#718198">角色可见性 · 图标 · 默认路由</text>
+  <rect x="1370" y="876" width="112" height="28" rx="8" fill="#356dff"/>
+  <text x="1398" y="895" font-family="Arial,sans-serif" font-size="12" fill="#fff">保存配置</text>
+</svg>
