@@ -43,3 +43,8 @@ ignore = ["E501"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["app"]
+
+# Tests import the editable top-level package name "app"; keep business code strict
+# while avoiding environment-dependent isort classification in test collection.
+[tool.ruff.lint.per-file-ignores]
+"tests/*.py" = ["I001"]
