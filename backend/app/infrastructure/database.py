@@ -28,6 +28,29 @@ class ApplicationStateRecord(Base):
     )
 
 
+class ApplicationConfigRecord(Base):
+    __tablename__ = "application_config"
+
+    app_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    name_override: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    navigation_group: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    navigation_order: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    hidden: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    visible_roles_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    default_launch_mode: Mapped[str] = mapped_column(String(24), nullable=False, default="workspace")
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
+    )
+
+    @property
+    def visible_roles(self) -> list[str]:
+        value = json.loads(self.visible_roles_json)
+        return [str(item) for item in value] if isinstance(value, list) else []
+
+
 class AuditEventRecord(Base):
     __tablename__ = "audit_event"
 

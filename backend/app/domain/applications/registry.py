@@ -25,7 +25,7 @@ class ManifestRegistry:
     def list(self) -> list[ApplicationSummary]:
         apps = [self._to_detail(manifest) for manifest in self._load_valid_manifests()]
         return [
-            ApplicationSummary(**app.model_dump(exclude={"capabilities_consumed", "capabilities_provided", "permissions", "manifest"}))
+            ApplicationSummary(**app.model_dump(exclude={"capabilities_consumed", "capabilities_provided", "permissions", "health_url", "manifest"}))
             for app in sorted(apps, key=lambda item: (item.navigation_order, item.name))
         ]
 
@@ -53,6 +53,7 @@ class ManifestRegistry:
         integration = workspace["integration"]
         navigation = manifest.get("navigation") or {}
         capabilities = manifest.get("capabilities") or {}
+        health = manifest.get("health") or {}
         return ApplicationDetail(
             id=manifest["id"],
             name=manifest["name"],
@@ -64,10 +65,15 @@ class ManifestRegistry:
             workspace_path=workspace["path"],
             integration_type=integration["type"],
             navigation_order=navigation.get("order", 100),
+            navigation_group=navigation.get("group", "Applications"),
             enabled=True,
+            hidden=False,
+            visible_roles=[],
+            default_launch_mode="workspace",
             capabilities_consumed=capabilities.get("consumes", []),
             capabilities_provided=capabilities.get("provides", []),
             permissions=manifest.get("permissions", []),
+            health_url=health.get("url"),
             manifest=manifest,
         )
 

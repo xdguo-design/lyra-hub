@@ -1,4 +1,12 @@
-import type { ApplicationDetail, ApplicationLaunch, ApplicationSummary, AuditEvent } from "./types";
+import type {
+  ApplicationDetail,
+  ApplicationLaunch,
+  ApplicationPageConfig,
+  ApplicationSummary,
+  AuditEvent,
+  CapabilityInfo,
+  ServiceStatus,
+} from "./types";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
 
@@ -21,6 +29,10 @@ export function listApplications(): Promise<ApplicationSummary[]> {
   return request<ApplicationSummary[]>("/api/v1/applications");
 }
 
+export function listNavigation(roles?: string): Promise<ApplicationSummary[]> {
+  return request<ApplicationSummary[]>("/api/v1/navigation", roles ? { headers: { "X-Lyra-Roles": roles } } : undefined);
+}
+
 export function getApplication(appId: string): Promise<ApplicationDetail> {
   return request<ApplicationDetail>("/api/v1/applications/" + encodeURIComponent(appId));
 }
@@ -38,8 +50,43 @@ export function launchApplication(appId: string): Promise<ApplicationLaunch> {
   });
 }
 
+export function listPageConfiguration(): Promise<ApplicationPageConfig[]> {
+  return request<ApplicationPageConfig[]>("/api/v1/page-config");
+}
+
+export function updatePageConfiguration(
+  appId: string,
+  update: Partial<Omit<ApplicationPageConfig, "app_id">>,
+): Promise<ApplicationPageConfig> {
+  return request<ApplicationPageConfig>("/api/v1/page-config/" + encodeURIComponent(appId), {
+    method: "PATCH",
+    body: JSON.stringify(update),
+  });
+}
+
 export function listAuditEvents(): Promise<AuditEvent[]> {
-  return request<AuditEvent[]>("/api/v1/audit/events?limit=20");
+  return request<AuditEvent[]>("/api/v1/audit/events?limit=40");
+}
+
+export async function getPlatformStatus(): Promise<ServiceStatus[]> {
+  const response = await request<{ services: ServiceStatus[] }>("/api/v1/platform/status");
+  return response.services;
+}
+
+export async function listCapabilities(): Promise<CapabilityInfo[]> {
+  const response = await request<{ data: CapabilityInfo[] }>("/api/v1/capabilities");
+  return response.data;
+}
+
+export async function invokeCapability(
+  capability: string,
+  payload: Record<string, unknown> = {},
+): Promise<Record<string, unknown>> {
+  const response = await request<{ result: Record<string, unknown> }>(
+    "/api/v1/capabilities/" + encodeURIComponent(capability) + "/invoke",
+    { method: "POST", body: JSON.stringify({ payload }) },
+  );
+  return response.result;
 }
 
 export async function getHubHealth(): Promise<boolean> {
