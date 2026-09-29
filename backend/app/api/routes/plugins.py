@@ -104,7 +104,7 @@ def update_plugin(
         missing = sorted(set(plugin.permissions) - set(granted_permissions))
         if enabled and missing:
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail={"code": "plugin_permissions_missing", "permissions": missing},
             )
 

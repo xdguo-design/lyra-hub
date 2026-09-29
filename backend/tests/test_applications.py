@@ -18,7 +18,7 @@ def test_health_and_ready(client: TestClient) -> None:
     assert health.status_code == 200
     assert health.json()["status"] == "ok"
     assert ready.status_code == 200
-    assert ready.json() == {"status": "ready", "registered_applications": 3}
+    assert ready.json() == {"status": "ready", "registered_applications": 3, "registered_plugins": 3}
 
 
 def test_lists_baseline_applications(client: TestClient) -> None:
