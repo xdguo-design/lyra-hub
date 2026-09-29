@@ -16,6 +16,7 @@ import {
   getPlatformStatus,
   invokeCapability,
   launchApplication,
+  listApplicationPages,
   listApplications,
   listAuditEvents,
   listCapabilities,
@@ -23,12 +24,14 @@ import {
   listPageConfiguration,
   listPlugins,
   setApplicationEnabled,
+  updateApplicationPage,
   updatePlugin,
   updatePageConfiguration,
 } from "./api";
 import type {
   ApplicationDetail,
   ApplicationPageConfig,
+  ApplicationPageItemConfig,
   ApplicationSummary,
   AuditEvent,
   CapabilityInfo,
@@ -53,6 +56,7 @@ export function App() {
   const [navigationApps, setNavigationApps] = useState<ApplicationSummary[]>([]);
   const [selected, setSelected] = useState<ApplicationDetail | null>(null);
   const [pageConfigs, setPageConfigs] = useState<ApplicationPageConfig[]>([]);
+  const [pageItems, setPageItems] = useState<Record<string, ApplicationPageItemConfig[]>>({});
   const [capabilities, setCapabilities] = useState<CapabilityInfo[]>([]);
   const [plugins, setPlugins] = useState<PluginSummary[]>([]);
   const [platformStatus, setPlatformStatus] = useState<ServiceStatus[]>([]);
@@ -163,7 +167,15 @@ export function App() {
   async function openPageConfiguration() {
     setError("");
     try {
-      setPageConfigs(await listPageConfiguration());
+      const configs = await listPageConfiguration();
+      const items = await Promise.all(
+        configs.map(async (config) => [
+          config.app_id,
+          await listApplicationPages(config.app_id),
+        ] as const),
+      );
+      setPageConfigs(configs);
+      setPageItems(Object.fromEntries(items));
       setView("page-config");
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "页面配置加载失败");
@@ -186,6 +198,26 @@ export function App() {
       }
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "页面配置保存失败");
+      throw reason;
+    }
+  }
+
+  async function saveApplicationPage(
+    appId: string,
+    pageId: string,
+    update: Partial<Omit<ApplicationPageItemConfig, "app_id" | "page_id" | "path">>,
+  ) {
+    setError("");
+    try {
+      const saved = await updateApplicationPage(appId, pageId, update);
+      setPageItems((current) => ({
+        ...current,
+        [appId]: (current[appId] ?? []).map((item) =>
+          item.page_id === pageId ? saved : item,
+        ),
+      }));
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "页面项配置保存失败");
       throw reason;
     }
   }
@@ -660,6 +692,52 @@ export function App() {
                 );
               })}
             </div>
+
+            <div className="pageItemSection">
+              <div className="sectionHead compactHead">
+                <div>
+                  <h3>应用内部页面入口</h3>
+                  <p>
+                    这些配置只改变 Hub 中的入口名称、顺序和可见性，不改业务应用自己的路由实现。
+                  </p>
+                </div>
+              </div>
+              {pageConfigs.map((config) => {
+                const appItem = applications.find(
+                  (item) => item.id === config.app_id,
+                );
+                const items = pageItems[config.app_id] ?? [];
+                return (
+                  <div className="pageItemGroup" key={config.app_id}>
+                    <div className="pageItemGroupTitle">
+                      <strong>{appItem?.name ?? config.app_id}</strong>
+                      <span>{items.length} 个页面</span>
+                    </div>
+                    {items.length === 0 ? (
+                      <div className="emptyState compactEmpty">
+                        Manifest 暂未声明页面。
+                      </div>
+                    ) : (
+                      <div className="pageItemList">
+                        {items.map((item) => (
+                          <PageItemConfigRow
+                            key={item.page_id}
+                            item={item}
+                            onSave={(update) =>
+                              saveApplicationPage(
+                                config.app_id,
+                                item.page_id,
+                                update,
+                              )
+                            }
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           </section>
         )}
 
@@ -1101,5 +1179,90 @@ function PageConfigCard({
         {saving ? "保存中…" : "保存配置"}
       </button>
     </article>
+  );
+}
+
+
+function PageItemConfigRow({
+  item,
+  onSave,
+}: {
+  item: ApplicationPageItemConfig;
+  onSave: (
+    update: Partial<Omit<ApplicationPageItemConfig, "app_id" | "page_id" | "path">>,
+  ) => Promise<void>;
+}) {
+  const [title, setTitle] = useState(item.title);
+  const [order, setOrder] = useState(String(item.navigation_order));
+  const [roles, setRoles] = useState(item.visible_roles.join(", "));
+  const [hidden, setHidden] = useState(item.hidden);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    setTitle(item.title);
+    setOrder(String(item.navigation_order));
+    setRoles(item.visible_roles.join(", "));
+    setHidden(item.hidden);
+  }, [item]);
+
+  async function save() {
+    setSaving(true);
+    try {
+      await onSave({
+        title: title.trim() || item.title,
+        navigation_order: Number(order) || 0,
+        visible_roles: roles
+          .split(",")
+          .map((role) => role.trim())
+          .filter(Boolean),
+        hidden,
+      });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className={hidden ? "pageItemRow pageItemRowHidden" : "pageItemRow"}>
+      <div className="pageItemIdentity">
+        <strong>{item.page_id}</strong>
+        <code>{item.path}</code>
+      </div>
+      <label>
+        <span>显示名称</span>
+        <input value={title} onChange={(event) => setTitle(event.target.value)} />
+      </label>
+      <label>
+        <span>顺序</span>
+        <input
+          type="number"
+          value={order}
+          onChange={(event) => setOrder(event.target.value)}
+        />
+      </label>
+      <label>
+        <span>可见角色</span>
+        <input
+          value={roles}
+          onChange={(event) => setRoles(event.target.value)}
+          placeholder="留空表示全部"
+        />
+      </label>
+      <label className="checkboxLabel pageItemCheckbox">
+        <input
+          type="checkbox"
+          checked={hidden}
+          onChange={(event) => setHidden(event.target.checked)}
+        />
+        <span>隐藏</span>
+      </label>
+      <button
+        className="secondaryButton compactButton"
+        disabled={saving}
+        onClick={() => void save()}
+      >
+        {saving ? "保存中…" : "保存"}
+      </button>
+    </div>
   );
 }

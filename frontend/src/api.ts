@@ -2,6 +2,7 @@ import type {
   ApplicationDetail,
   ApplicationLaunch,
   ApplicationPageConfig,
+  ApplicationPageItemConfig,
   ApplicationSummary,
   AuditEvent,
   CapabilityInfo,
@@ -63,6 +64,23 @@ export function updatePageConfiguration(
     method: "PATCH",
     body: JSON.stringify(update),
   });
+}
+
+export function listApplicationPages(appId: string): Promise<ApplicationPageItemConfig[]> {
+  return request<ApplicationPageItemConfig[]>(
+    "/api/v1/page-config/" + encodeURIComponent(appId) + "/pages",
+  );
+}
+
+export function updateApplicationPage(
+  appId: string,
+  pageId: string,
+  update: Partial<Omit<ApplicationPageItemConfig, "app_id" | "page_id" | "path">>,
+): Promise<ApplicationPageItemConfig> {
+  return request<ApplicationPageItemConfig>(
+    "/api/v1/page-config/" + encodeURIComponent(appId) + "/pages/" + encodeURIComponent(pageId),
+    { method: "PATCH", body: JSON.stringify(update) },
+  );
 }
 
 export function listAuditEvents(): Promise<AuditEvent[]> {

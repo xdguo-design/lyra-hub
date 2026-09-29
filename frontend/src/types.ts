@@ -51,6 +51,16 @@ export type ApplicationPageConfig = {
   default_launch_mode: "workspace" | "standalone";
 };
 
+export type ApplicationPageItemConfig = {
+  app_id: string;
+  page_id: string;
+  title: string;
+  path: string;
+  navigation_order: number;
+  hidden: boolean;
+  visible_roles: string[];
+};
+
 export type ServiceStatus = {
   id: string;
   name: string;
