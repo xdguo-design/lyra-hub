@@ -5,6 +5,7 @@ import type {
   ApplicationSummary,
   AuditEvent,
   CapabilityInfo,
+  PluginSummary,
   ServiceStatus,
 } from "./types";
 
@@ -87,6 +88,21 @@ export async function invokeCapability(
     { method: "POST", body: JSON.stringify({ payload }) },
   );
   return response.result;
+}
+
+export function listPlugins(applicationId?: string): Promise<PluginSummary[]> {
+  const query = applicationId ? "?application_id=" + encodeURIComponent(applicationId) : "";
+  return request<PluginSummary[]>("/api/v1/plugins" + query);
+}
+
+export function updatePlugin(
+  pluginId: string,
+  update: { enabled?: boolean; granted_permissions?: string[] },
+): Promise<PluginSummary> {
+  return request<PluginSummary>("/api/v1/plugins/" + encodeURIComponent(pluginId), {
+    method: "PATCH",
+    body: JSON.stringify(update),
+  });
 }
 
 export async function getHubHealth(): Promise<boolean> {

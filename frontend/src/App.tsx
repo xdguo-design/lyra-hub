@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  AppstoreAddOutlined,
   AppstoreOutlined,
   DashboardOutlined,
   DeploymentUnitOutlined,
@@ -20,7 +21,9 @@ import {
   listCapabilities,
   listNavigation,
   listPageConfiguration,
+  listPlugins,
   setApplicationEnabled,
+  updatePlugin,
   updatePageConfiguration,
 } from "./api";
 import type {
@@ -29,6 +32,7 @@ import type {
   ApplicationSummary,
   AuditEvent,
   CapabilityInfo,
+  PluginSummary,
   ServiceStatus,
 } from "./types";
 
@@ -36,6 +40,7 @@ type View =
   | "overview"
   | "applications"
   | "application"
+  | "plugins"
   | "page-config"
   | "capabilities"
   | "permissions"
@@ -49,11 +54,13 @@ export function App() {
   const [selected, setSelected] = useState<ApplicationDetail | null>(null);
   const [pageConfigs, setPageConfigs] = useState<ApplicationPageConfig[]>([]);
   const [capabilities, setCapabilities] = useState<CapabilityInfo[]>([]);
+  const [plugins, setPlugins] = useState<PluginSummary[]>([]);
   const [platformStatus, setPlatformStatus] = useState<ServiceStatus[]>([]);
   const [auditEvents, setAuditEvents] = useState<AuditEvent[]>([]);
   const [hubHealthy, setHubHealthy] = useState<boolean | null>(null);
   const [error, setError] = useState("");
   const [busyApp, setBusyApp] = useState<string | null>(null);
+  const [busyPlugin, setBusyPlugin] = useState<string | null>(null);
   const [roleInput, setRoleInput] = useState("writer");
   const [rolePreview, setRolePreview] = useState<ApplicationSummary[]>([]);
   const [capabilityResult, setCapabilityResult] = useState("");
@@ -120,6 +127,36 @@ export function App() {
       setError(reason instanceof Error ? reason.message : "应用启动失败");
     } finally {
       setBusyApp(null);
+    }
+  }
+
+  async function openPlugins() {
+    setError("");
+    try {
+      setPlugins(await listPlugins());
+      setView("plugins");
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "插件中心加载失败");
+    }
+  }
+
+  async function togglePlugin(plugin: PluginSummary) {
+    setBusyPlugin(plugin.id);
+    setError("");
+    try {
+      const saved = await updatePlugin(plugin.id, {
+        enabled: !plugin.enabled,
+        granted_permissions: plugin.enabled
+          ? plugin.granted_permissions
+          : plugin.permissions,
+      });
+      setPlugins((current) =>
+        current.map((item) => (item.id === saved.id ? saved : item)),
+      );
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "插件状态更新失败");
+    } finally {
+      setBusyPlugin(null);
     }
   }
 
@@ -220,8 +257,10 @@ export function App() {
         ? "应用中心"
         : view === "application"
           ? selected?.name ?? "应用详情"
-          : view === "page-config"
-            ? "页面配置"
+          : view === "plugins"
+            ? "插件中心"
+            : view === "page-config"
+              ? "页面配置"
             : view === "capabilities"
               ? "能力中心"
               : view === "permissions"
@@ -250,6 +289,12 @@ export function App() {
             icon={<AppstoreOutlined />}
             label="应用中心"
             onClick={() => setView("applications")}
+          />
+          <NavButton
+            active={view === "plugins"}
+            icon={<AppstoreAddOutlined />}
+            label="插件中心"
+            onClick={() => void openPlugins()}
           />
           <NavButton
             active={view === "page-config"}
@@ -518,6 +563,73 @@ export function App() {
                 <strong>{selected.hidden ? "隐藏" : "显示"}</strong>
               </div>
             </aside>
+          </section>
+        )}
+
+        {view === "plugins" && (
+          <section className="section">
+            <div className="sectionHead">
+              <div>
+                <h3>插件中心</h3>
+                <p>
+                  插件按 Manifest 注册；启用前必须显式授予它声明的权限，业务应用仍保持独立运行。
+                </p>
+              </div>
+              <span className="pill">{plugins.length} 个插件</span>
+            </div>
+            <div className="pluginGrid">
+              {plugins.map((plugin) => (
+                <article
+                  className={plugin.enabled ? "pluginCard" : "pluginCard pluginCardDisabled"}
+                  key={plugin.id}
+                >
+                  <div className="pluginHeader">
+                    <div className="appIcon small">插</div>
+                    <div>
+                      <strong>{plugin.name}</strong>
+                      <small>{plugin.id} · v{plugin.version}</small>
+                    </div>
+                    <span className={plugin.enabled ? "pill goodPill" : "pill"}>
+                      {plugin.enabled ? "已启用" : "未启用"}
+                    </span>
+                  </div>
+                  <p>{plugin.description || "Lyra Hub 插件"}</p>
+
+                  <div className="pluginSectionLabel">目标应用</div>
+                  <div className="tagList">
+                    {plugin.target_applications.map((appId) => (
+                      <span key={appId}>{appId}</span>
+                    ))}
+                  </div>
+
+                  <div className="pluginSectionLabel">所需权限</div>
+                  <div className="tagList">
+                    {plugin.permissions.map((permission) => (
+                      <span key={permission}>{permission}</span>
+                    ))}
+                  </div>
+
+                  <div className="pluginContributions">
+                    <span>{plugin.contributions.widgets.length} Widgets</span>
+                    <span>{plugin.contributions.actions.length} Actions</span>
+                    <span>{plugin.contributions.slots.length} Slots</span>
+                    <span>{plugin.capabilities_consumed.length} Capabilities</span>
+                  </div>
+
+                  <button
+                    className={plugin.enabled ? "secondaryButton" : "primaryButton"}
+                    disabled={busyPlugin === plugin.id}
+                    onClick={() => void togglePlugin(plugin)}
+                  >
+                    {busyPlugin === plugin.id
+                      ? "处理中…"
+                      : plugin.enabled
+                        ? "停用插件"
+                        : "授权并启用"}
+                  </button>
+                </article>
+              ))}
+            </div>
           </section>
         )}
 

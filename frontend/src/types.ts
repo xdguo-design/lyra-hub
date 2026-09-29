@@ -66,3 +66,25 @@ export type CapabilityInfo = {
   description: string;
   reachable: boolean;
 };
+
+
+export type PluginContribution = {
+  widgets: Record<string, unknown>[];
+  actions: Record<string, unknown>[];
+  navigation: Record<string, unknown>[];
+  pages: Record<string, unknown>[];
+  slots: Record<string, unknown>[];
+};
+
+export type PluginSummary = {
+  id: string;
+  name: string;
+  version: string;
+  description: string;
+  target_applications: string[];
+  permissions: string[];
+  capabilities_consumed: string[];
+  contributions: PluginContribution;
+  enabled: boolean;
+  granted_permissions: string[];
+};
