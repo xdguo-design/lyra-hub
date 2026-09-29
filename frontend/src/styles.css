@@ -123,6 +123,13 @@ h1 { margin: 5px 0 0; font-size: 30px; }
 .capabilityMeta { display: flex; flex-wrap: wrap; gap: 7px; font-size: 10px; color: #687790; }
 .capabilityMeta span { background: #eef2f8; border-radius: 999px; padding: 4px 7px; }
 .resultPanel { margin: 16px 0 0; max-height: 340px; overflow: auto; border-radius: 14px; background: #0d1d35; color: #d7e4f8; padding: 16px; font-size: 12px; line-height: 1.55; }
+.dependencyTable { border: 1px solid #e5eaf1; border-radius: 14px; overflow: hidden; }
+.dependencyRow { display: grid; grid-template-columns: 1.2fr 1.4fr 1fr 120px; gap: 12px; align-items: center; padding: 12px 14px; border-top: 1px solid #edf0f4; font-size: 12px; }
+.dependencyRow:first-child { border-top: 0; }
+.dependencyHead { background: #f7f9fc; color: #7a879b; font-size: 10px; font-weight: 800; text-transform: uppercase; }
+.dependencyRow code { color: #40577a; overflow-wrap: anywhere; }
+.dependencyRow .pill { width: fit-content; }
+
 .roleTester { display: grid; grid-template-columns: minmax(240px, 1fr) auto; gap: 12px; align-items: end; max-width: 720px; }
 .rolePreview { margin-top: 18px; border: 1px solid #e7ebf1; border-radius: 14px; overflow: hidden; }
 .roleApp { display: flex; align-items: center; gap: 10px; padding: 13px 15px; border-top: 1px solid #edf0f4; }
@@ -208,6 +215,8 @@ h1 { margin: 5px 0 0; font-size: 30px; }
   .platformGrid { grid-template-columns: 1fr; }
   .table { overflow-x: auto; }
   .tableRow { min-width: 760px; }
+  .dependencyTable { overflow-x: auto; }
+  .dependencyRow { min-width: 660px; }
   .detailHeader { grid-template-columns: auto 1fr; }
   .detailHeader .pill { grid-column: 2; width: fit-content; }
   .infoGrid { grid-template-columns: 1fr; }

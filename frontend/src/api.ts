@@ -5,6 +5,7 @@ import type {
   ApplicationPageItemConfig,
   ApplicationSummary,
   AuditEvent,
+  CapabilityDependency,
   CapabilityInfo,
   PluginSummary,
   ServiceStatus,
@@ -94,6 +95,13 @@ export async function getPlatformStatus(): Promise<ServiceStatus[]> {
 
 export async function listCapabilities(): Promise<CapabilityInfo[]> {
   const response = await request<{ data: CapabilityInfo[] }>("/api/v1/capabilities");
+  return response.data;
+}
+
+export async function listCapabilityDependencies(): Promise<CapabilityDependency[]> {
+  const response = await request<{ data: CapabilityDependency[] }>(
+    "/api/v1/capability-dependencies",
+  );
   return response.data;
 }
 

@@ -20,6 +20,7 @@ import {
   listApplications,
   listAuditEvents,
   listCapabilities,
+  listCapabilityDependencies,
   listNavigation,
   listPageConfiguration,
   listPlugins,
@@ -35,6 +36,7 @@ import type {
   ApplicationPageItemConfig,
   ApplicationSummary,
   AuditEvent,
+  CapabilityDependency,
   CapabilityInfo,
   PluginSummary,
   ServiceStatus,
@@ -61,6 +63,7 @@ export function App() {
   const [pageConfigs, setPageConfigs] = useState<ApplicationPageConfig[]>([]);
   const [pageItems, setPageItems] = useState<Record<string, ApplicationPageItemConfig[]>>({});
   const [capabilities, setCapabilities] = useState<CapabilityInfo[]>([]);
+  const [capabilityDependencies, setCapabilityDependencies] = useState<CapabilityDependency[]>([]);
   const [plugins, setPlugins] = useState<PluginSummary[]>([]);
   const [platformStatus, setPlatformStatus] = useState<ServiceStatus[]>([]);
   const [auditEvents, setAuditEvents] = useState<AuditEvent[]>([]);
@@ -236,12 +239,14 @@ export function App() {
   async function openCapabilities() {
     setError("");
     try {
-      const [items, statuses] = await Promise.all([
+      const [items, statuses, dependencies] = await Promise.all([
         listCapabilities(),
         getPlatformStatus(),
+        listCapabilityDependencies(),
       ]);
       setCapabilities(items);
       setPlatformStatus(statuses);
+      setCapabilityDependencies(dependencies);
       setView("capabilities");
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "能力中心加载失败");
@@ -869,6 +874,50 @@ export function App() {
               {capabilityResult && (
                 <pre className="resultPanel">{capabilityResult}</pre>
               )}
+            </section>
+
+            <section className="section">
+              <div className="sectionHead">
+                <div>
+                  <h3>应用能力依赖</h3>
+                  <p>
+                    直接核对小说、打印、医院 AI 声明的能力，区分已满足、服务不可达和当前缺失。
+                  </p>
+                </div>
+              </div>
+              <div className="dependencyTable">
+                <div className="dependencyRow dependencyHead">
+                  <span>应用</span>
+                  <span>Capability</span>
+                  <span>提供方</span>
+                  <span>状态</span>
+                </div>
+                {capabilityDependencies.map((item) => (
+                  <div
+                    className="dependencyRow"
+                    key={item.application_id + ":" + item.capability}
+                  >
+                    <span>{item.application_name}</span>
+                    <code>{item.capability}</code>
+                    <span>{item.source ?? "未注册"}</span>
+                    <span
+                      className={
+                        item.status === "available"
+                          ? "pill goodPill"
+                          : item.status === "unreachable"
+                            ? "pill"
+                            : "pill badPill"
+                      }
+                    >
+                      {item.status === "available"
+                        ? "已满足"
+                        : item.status === "unreachable"
+                          ? "服务不可达"
+                          : "缺能力"}
+                    </span>
+                  </div>
+                ))}
+              </div>
             </section>
           </>
         )}

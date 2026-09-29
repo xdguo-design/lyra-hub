@@ -70,6 +70,14 @@ export type ServiceStatus = {
   detail: string | Record<string, unknown>;
 };
 
+export type CapabilityDependency = {
+  application_id: string;
+  application_name: string;
+  capability: string;
+  source: string | null;
+  status: "available" | "unreachable" | "missing";
+};
+
 export type CapabilityInfo = {
   name: string;
   source: string;
