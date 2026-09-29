@@ -1,0 +1,162 @@
+name: app-integration
+
+on:
+  push:
+    branches: [dev]
+  pull_request:
+    paths:
+      - "examples/manifests/**"
+      - "contracts/**"
+      - ".github/workflows/app-integration.yml"
+
+jobs:
+  narrative:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Hub
+        uses: actions/checkout@v4
+
+      - name: Checkout Narrative
+        uses: actions/checkout@v4
+        with:
+          repository: xdguo-design/lyra-narrative
+          ref: main
+          path: _integration/lyra-narrative
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: _integration/lyra-narrative/requirements.txt
+
+      - name: Install Narrative runtime
+        working-directory: _integration/lyra-narrative
+        run: pip install -r requirements.txt
+
+      - name: Start Narrative
+        working-directory: _integration/lyra-narrative
+        env:
+          NOVEL_DB_PATH: /tmp/lyra-hub-narrative.db
+          NOVEL_SEED_DEMO: "0"
+          NOVEL_AI_KIND: demo
+        run: |
+          python -m uvicorn app.main:app --host 127.0.0.1 --port 18000 > /tmp/narrative.log 2>&1 &
+          echo $! > /tmp/narrative.pid
+
+      - name: Verify Narrative Hub contract
+        run: |
+          python - <<'PY'
+          import json, time, urllib.request
+
+          def get(url):
+              for _ in range(40):
+                  try:
+                      with urllib.request.urlopen(url, timeout=2) as response:
+                          return response.status, response.headers, response.read().decode()
+                  except Exception:
+                      time.sleep(.25)
+              raise SystemExit(f"unreachable: {url}")
+
+          status, headers, body = get("http://127.0.0.1:18000/api/health")
+          assert status == 200
+          payload = json.loads(body)
+          assert payload["ok"] is True
+          assert payload["service"] == "narrative-os"
+
+          status, headers, body = get("http://127.0.0.1:18000/")
+          assert status == 200
+          assert "NarrativeOS" in body
+          frame = (headers.get("x-frame-options") or "").lower()
+          assert frame not in {"deny", "sameorigin"}, frame
+          csp = (headers.get("content-security-policy") or "").lower()
+          assert "frame-ancestors 'none'" not in csp
+          assert "frame-ancestors 'self'" not in csp
+          print("Narrative Hub integration contract OK")
+          PY
+
+      - name: Dump Narrative log on failure
+        if: failure()
+        run: cat /tmp/narrative.log || true
+
+  printing:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Hub
+        uses: actions/checkout@v4
+
+      - name: Checkout Print
+        uses: actions/checkout@v4
+        with:
+          repository: xdguo-design/lyra-print
+          ref: dev
+          path: _integration/lyra-print
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: _integration/lyra-print/backend/print-platform-python/pyproject.toml
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.17.1
+          run_install: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.12.0"
+
+      - name: Install Print backend
+        working-directory: _integration/lyra-print/backend/print-platform-python
+        run: pip install -e .
+
+      - name: Start Print backend
+        working-directory: _integration/lyra-print/backend/print-platform-python
+        env:
+          PRINT_DATABASE_URL: sqlite:////tmp/lyra-hub-print.db
+        run: |
+          python -m uvicorn app.main:app --host 127.0.0.1 --port 18080 > /tmp/print-backend.log 2>&1 &
+          echo $! > /tmp/print-backend.pid
+
+      - name: Build and start Print React console
+        working-directory: _integration/lyra-print/frontend/print-console-react
+        run: |
+          pnpm install --no-frozen-lockfile
+          pnpm build
+          pnpm exec vite --host 127.0.0.1 --port 15174 > /tmp/print-frontend.log 2>&1 &
+          echo $! > /tmp/print-frontend.pid
+
+      - name: Verify Print Hub contract
+        run: |
+          python - <<'PY'
+          import json, time, urllib.request
+
+          def get(url):
+              for _ in range(60):
+                  try:
+                      with urllib.request.urlopen(url, timeout=2) as response:
+                          return response.status, response.headers, response.read().decode()
+                  except Exception:
+                      time.sleep(.25)
+              raise SystemExit(f"unreachable: {url}")
+
+          status, _, body = get("http://127.0.0.1:18080/health")
+          assert status == 200
+          assert json.loads(body)["status"] == "UP"
+
+          status, headers, body = get("http://127.0.0.1:15174/")
+          assert status == 200
+          assert "<div id=\"root\"></div>" in body
+          frame = (headers.get("x-frame-options") or "").lower()
+          assert frame not in {"deny", "sameorigin"}, frame
+          csp = (headers.get("content-security-policy") or "").lower()
+          assert "frame-ancestors 'none'" not in csp
+          assert "frame-ancestors 'self'" not in csp
+          print("Print Hub integration contract OK")
+          PY
+
+      - name: Dump Print logs on failure
+        if: failure()
+        run: |
+          cat /tmp/print-backend.log || true
+          cat /tmp/print-frontend.log || true

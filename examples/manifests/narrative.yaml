@@ -7,12 +7,12 @@ description: 小说与内容创作业务应用
 category: content
 standalone:
   enabled: true
-  url: https://narrative.example.com
+  url: http://127.0.0.1:8000
 workspace:
   enabled: true
   path: /apps/narrative
   integration:
-    type: external
+    type: iframe
     url: https://narrative.example.com
 navigation:
   title: 小说工作台
@@ -48,3 +48,7 @@ capabilities:
 permissions:
   - narrative.read
   - narrative.write
+
+health:
+  url: http://127.0.0.1:8000/api/health
+  timeoutMs: 5000

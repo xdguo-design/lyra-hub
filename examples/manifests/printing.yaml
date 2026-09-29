@@ -7,12 +7,12 @@ description: 独立打印平台
 category: productivity
 standalone:
   enabled: true
-  url: https://print.example.com
+  url: http://127.0.0.1:5174
 workspace:
   enabled: true
   path: /apps/printing
   integration:
-    type: external
+    type: iframe
     url: https://print.example.com
 navigation:
   title: 智能打印
@@ -44,3 +44,7 @@ capabilities:
 permissions:
   - printing.read
   - printing.operate
+
+health:
+  url: http://127.0.0.1:8080/health
+  timeoutMs: 5000
