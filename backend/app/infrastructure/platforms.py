@@ -17,7 +17,7 @@ class PlatformSettings:
     timeout_seconds: float = 5.0
 
     @classmethod
-    def from_env(cls) -> "PlatformSettings":
+    def from_env(cls) -> PlatformSettings:
         return cls(
             gateway_url=os.getenv("LYRA_GATEWAY_URL", cls.gateway_url).rstrip("/"),
             gateway_token=os.getenv("LYRA_GATEWAY_TOKEN", ""),
