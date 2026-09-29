@@ -7,8 +7,9 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 
-from app.api.routes import applications, audit, capabilities, page_configuration
+from app.api.routes import applications, audit, capabilities, page_configuration, plugins
 from app.domain.applications.registry import ManifestRegistry
+from app.domain.plugins.registry import PluginRegistry
 from app.infrastructure.database import Database
 from app.infrastructure.platforms import PlatformServices, PlatformSettings
 
@@ -21,6 +22,7 @@ def create_app(
 ) -> FastAPI:
     resolved_root = repo_root or Path(__file__).resolve().parents[2]
     registry = ManifestRegistry(resolved_root)
+    plugin_registry = PluginRegistry(resolved_root)
     database = Database(database_url)
     database.initialize()
     platform_services = PlatformServices(platform_settings, platform_transport)
@@ -44,6 +46,8 @@ def create_app(
     api.dependency_overrides[page_configuration.get_registry] = lambda: registry
     api.dependency_overrides[page_configuration.get_database] = lambda: database
     api.dependency_overrides[capabilities.get_platform_services] = lambda: platform_services
+    api.dependency_overrides[plugins.get_registry] = lambda: plugin_registry
+    api.dependency_overrides[plugins.get_database] = lambda: database
 
     @api.get("/health", tags=["system"])
     def health() -> dict[str, str]:
@@ -54,12 +58,17 @@ def create_app(
         registered = len(registry.list())
         with database.session() as session:
             session.execute(text("SELECT 1"))
-        return {"status": "ready", "registered_applications": registered}
+        return {
+            "status": "ready",
+            "registered_applications": registered,
+            "registered_plugins": len(plugin_registry.list()),
+        }
 
     api.include_router(applications.router, prefix="/api/v1")
     api.include_router(page_configuration.router, prefix="/api/v1")
     api.include_router(capabilities.router, prefix="/api/v1")
     api.include_router(audit.router, prefix="/api/v1")
+    api.include_router(plugins.router, prefix="/api/v1")
     return api
 
 

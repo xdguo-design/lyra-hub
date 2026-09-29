@@ -1,0 +1,24 @@
+schemaVersion: "1.0"
+id: document-ai-assistant
+name: 文档 AI 助手
+version: "0.1.0"
+type: plugin
+description: 可复用的文档解析与 AI 辅助插件，首批用于打印和医院 AI
+targetApplications:
+  - lyra-print
+  - hospital-ai
+permissions:
+  - document.read
+capabilities:
+  consumes:
+    - agent.run
+    - file.read
+contributes:
+  widgets:
+    - id: document-assistant
+      title: 文档 AI 助手
+      component: document-assistant
+  slots:
+    - target: app.page.header.after
+      component: document-assistant
+      order: 40

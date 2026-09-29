@@ -51,6 +51,25 @@ class ApplicationConfigRecord(Base):
         return [str(item) for item in value] if isinstance(value, list) else []
 
 
+class PluginStateRecord(Base):
+    __tablename__ = "plugin_state"
+
+    plugin_id: Mapped[str] = mapped_column(String(96), primary_key=True)
+    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    granted_permissions_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
+    )
+
+    @property
+    def granted_permissions(self) -> list[str]:
+        value = json.loads(self.granted_permissions_json)
+        return [str(item) for item in value] if isinstance(value, list) else []
+
+
 class AuditEventRecord(Base):
     __tablename__ = "audit_event"
 

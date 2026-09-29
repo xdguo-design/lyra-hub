@@ -1,0 +1,22 @@
+schemaVersion: "1.0"
+id: print-ai-diagnostics
+name: AI 打印诊断
+version: "0.1.0"
+type: plugin
+description: 为打印平台提供任务与设备异常的 AI 诊断入口
+targetApplications:
+  - lyra-print
+permissions:
+  - printing.read
+capabilities:
+  consumes:
+    - agent.run
+contributes:
+  widgets:
+    - id: print-diagnostics
+      title: AI 诊断
+      component: print-diagnostics
+  slots:
+    - target: app.detail.sidebar
+      component: print-diagnostics
+      order: 30

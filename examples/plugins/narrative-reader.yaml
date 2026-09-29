@@ -1,0 +1,27 @@
+schemaVersion: "1.0"
+id: narrative-reader
+name: Reader 审稿
+version: "0.1.0"
+type: plugin
+description: 为小说工作台提供 Reader 审稿入口与结果 Widget
+targetApplications:
+  - lyra-narrative
+permissions:
+  - narrative.read
+  - narrative.write
+capabilities:
+  consumes:
+    - agent.run
+    - workflow.run
+contributes:
+  widgets:
+    - id: reader-review-summary
+      title: Reader 审稿结果
+      component: reader-review-summary
+  actions:
+    - id: run-reader-review
+      title: 发起 Reader 审稿
+  slots:
+    - target: app.page.header.after
+      component: reader-review-summary
+      order: 20
