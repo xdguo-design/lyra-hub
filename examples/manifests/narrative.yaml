@@ -13,7 +13,9 @@ workspace:
   path: /apps/narrative
   integration:
     type: iframe
-    url: https://narrative.example.com
+    url: http://127.0.0.1:8000
+    allowedOrigins:
+      - http://127.0.0.1:8000
 navigation:
   title: 小说工作台
   icon: book
@@ -48,7 +50,6 @@ capabilities:
 permissions:
   - narrative.read
   - narrative.write
-
 health:
   url: http://127.0.0.1:8000/api/health
   timeoutMs: 5000

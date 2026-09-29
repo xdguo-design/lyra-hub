@@ -13,7 +13,9 @@ workspace:
   path: /apps/printing
   integration:
     type: iframe
-    url: https://print.example.com
+    url: http://127.0.0.1:5174
+    allowedOrigins:
+      - http://127.0.0.1:5174
 navigation:
   title: 智能打印
   icon: printer
@@ -44,7 +46,6 @@ capabilities:
 permissions:
   - printing.read
   - printing.operate
-
 health:
   url: http://127.0.0.1:8080/health
   timeoutMs: 5000
