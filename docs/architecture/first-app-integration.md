@@ -7,7 +7,7 @@ Date: 2026-09-29
 
 ### Lyra Narrative
 
-Repository: `xdguo-design/lyra-narrative` (`dev` integration branch)
+Repository: `xdguo-design/lyra-narrative` (`main`)
 
 Current Hub development contract:
 
