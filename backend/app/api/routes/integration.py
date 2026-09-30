@@ -3,7 +3,8 @@ from __future__ import annotations
 from typing import Any
 
 import httpx
-from fastapi import APIRouter, Depends, Header, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field
 
 from app.domain.applications.registry import ManifestRegistry
@@ -12,6 +13,7 @@ from app.infrastructure.integration_auth import IntegrationTokenRegistry
 from app.infrastructure.platforms import PlatformServices
 
 router = APIRouter(prefix="/integration", tags=["integration"])
+bearer_scheme = HTTPBearer(auto_error=False)
 
 
 class ExternalCapabilityInvocationRequest(BaseModel):
@@ -95,8 +97,7 @@ def invoke_application_capability(
     app_id: str,
     capability: str,
     request: ExternalCapabilityInvocationRequest,
-    response: Response,
-    authorization: str | None = Header(default=None, alias="Authorization"),
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
     registry: ManifestRegistry = Depends(get_registry),
     database: Database = Depends(get_database),
     services: PlatformServices = Depends(get_platform_services),
@@ -111,8 +112,12 @@ def invoke_application_capability(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="External integration token is not configured for this application",
         )
+    authorization = (
+        f"{credentials.scheme} {credentials.credentials}"
+        if credentials is not None
+        else None
+    )
     if not tokens.verify_bearer(app_id, authorization):
-        response.headers["WWW-Authenticate"] = "Bearer"
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid application integration token",
