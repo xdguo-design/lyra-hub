@@ -7,10 +7,11 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 
-from app.api.routes import applications, audit, capabilities, page_configuration, plugins
+from app.api.routes import applications, audit, capabilities, integration, page_configuration, plugins
 from app.domain.applications.registry import ManifestRegistry
 from app.domain.plugins.registry import PluginRegistry
 from app.infrastructure.database import Database
+from app.infrastructure.integration_auth import IntegrationTokenRegistry
 from app.infrastructure.platforms import PlatformServices, PlatformSettings
 
 
@@ -19,6 +20,7 @@ def create_app(
     database_url: str | None = None,
     platform_settings: PlatformSettings | None = None,
     platform_transport: httpx.BaseTransport | None = None,
+    integration_tokens: dict[str, str] | None = None,
 ) -> FastAPI:
     resolved_root = repo_root or Path(__file__).resolve().parents[2]
     registry = ManifestRegistry(resolved_root)
@@ -26,6 +28,11 @@ def create_app(
     database = Database(database_url)
     database.initialize()
     platform_services = PlatformServices(platform_settings, platform_transport)
+    integration_token_registry = (
+        IntegrationTokenRegistry(integration_tokens)
+        if integration_tokens is not None
+        else IntegrationTokenRegistry.from_env()
+    )
 
     api = FastAPI(
         title="Lyra Hub API",
@@ -49,6 +56,10 @@ def create_app(
     api.dependency_overrides[capabilities.get_registry] = lambda: registry
     api.dependency_overrides[plugins.get_registry] = lambda: plugin_registry
     api.dependency_overrides[plugins.get_database] = lambda: database
+    api.dependency_overrides[integration.get_registry] = lambda: registry
+    api.dependency_overrides[integration.get_database] = lambda: database
+    api.dependency_overrides[integration.get_platform_services] = lambda: platform_services
+    api.dependency_overrides[integration.get_token_registry] = lambda: integration_token_registry
 
     @api.get("/health", tags=["system"])
     def health() -> dict[str, str]:
@@ -70,6 +81,7 @@ def create_app(
     api.include_router(capabilities.router, prefix="/api/v1")
     api.include_router(audit.router, prefix="/api/v1")
     api.include_router(plugins.router, prefix="/api/v1")
+    api.include_router(integration.router, prefix="/api/v1")
     return api
 
 
