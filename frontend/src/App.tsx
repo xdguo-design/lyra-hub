@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AppstoreAddOutlined,
   AppstoreOutlined,
@@ -29,6 +29,7 @@ import {
   updatePlugin,
   updatePageConfiguration,
 } from "./api";
+import { buildEmbeddedUrl, isAllowedBridgeOrigin, LYRA_BRIDGE_VERSION } from "./workspace-bridge";
 import type {
   ApplicationDetail,
   ApplicationLaunch,
@@ -60,6 +61,9 @@ export function App() {
   const [navigationApps, setNavigationApps] = useState<ApplicationSummary[]>([]);
   const [selected, setSelected] = useState<ApplicationDetail | null>(null);
   const [embeddedLaunch, setEmbeddedLaunch] = useState<ApplicationLaunch | null>(null);
+  const [embeddedApp, setEmbeddedApp] = useState<ApplicationDetail | null>(null);
+  const [bridgeState, setBridgeState] = useState<"idle" | "connecting" | "ready">("idle");
+  const embeddedFrameRef = useRef<HTMLIFrameElement>(null);
   const [pageConfigs, setPageConfigs] = useState<ApplicationPageConfig[]>([]);
   const [pageItems, setPageItems] = useState<Record<string, ApplicationPageItemConfig[]>>({});
   const [capabilities, setCapabilities] = useState<CapabilityInfo[]>([]);
@@ -136,7 +140,10 @@ export function App() {
         launchInfo.integration_type === "iframe" &&
         launchInfo.launch_mode === "workspace"
       ) {
+        const detail = await getApplication(appId);
+        setEmbeddedApp(detail);
         setEmbeddedLaunch(launchInfo);
+        setBridgeState("connecting");
         setView("embedded");
       } else {
         window.open(launchInfo.url, "_blank", "noopener,noreferrer");
@@ -147,6 +154,100 @@ export function App() {
       setBusyApp(null);
     }
   }
+
+  useEffect(() => {
+    if (!embeddedLaunch || !embeddedApp || view !== "embedded") return;
+
+    const onMessage = (event: MessageEvent) => {
+      const child = embeddedFrameRef.current?.contentWindow;
+      if (!child || event.source !== child) return;
+      if (!isAllowedBridgeOrigin(event.origin, embeddedLaunch.allowed_origins)) return;
+
+      const message = event.data as {
+        type?: string;
+        version?: string;
+        requestId?: string;
+        capability?: string;
+        payload?: Record<string, unknown>;
+      };
+      if (!message || message.version !== LYRA_BRIDGE_VERSION) return;
+
+      if (message.type === "lyra.app.ready") {
+        child.postMessage(
+          {
+            type: "lyra.workspace.init",
+            version: LYRA_BRIDGE_VERSION,
+            context: {
+              mode: "workspace",
+              appId: embeddedApp.id,
+              locale: navigator.language || "zh-CN",
+              theme: "light",
+              identity: {
+                authenticated: false,
+                user: null,
+                tenant: null,
+                roles: [],
+              },
+              capabilities: embeddedApp.capabilities_consumed,
+            },
+          },
+          event.origin,
+        );
+        setBridgeState("ready");
+        return;
+      }
+
+      if (
+        message.type === "lyra.capability.invoke" &&
+        message.requestId &&
+        message.capability
+      ) {
+        const allowed = embeddedApp.capabilities_consumed.includes(message.capability);
+        if (!allowed) {
+          child.postMessage(
+            {
+              type: "lyra.capability.result",
+              version: LYRA_BRIDGE_VERSION,
+              requestId: message.requestId,
+              ok: false,
+              error: "capability_not_declared",
+            },
+            event.origin,
+          );
+          return;
+        }
+
+        void invokeCapability(message.capability, message.payload ?? {})
+          .then((result) => {
+            child.postMessage(
+              {
+                type: "lyra.capability.result",
+                version: LYRA_BRIDGE_VERSION,
+                requestId: message.requestId,
+                ok: true,
+                result,
+              },
+              event.origin,
+            );
+          })
+          .catch((reason: unknown) => {
+            child.postMessage(
+              {
+                type: "lyra.capability.result",
+                version: LYRA_BRIDGE_VERSION,
+                requestId: message.requestId,
+                ok: false,
+                error: reason instanceof Error ? reason.message : "capability_failed",
+              },
+              event.origin,
+            );
+          });
+      }
+    };
+
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, [embeddedApp, embeddedLaunch, view]);
 
   async function openPlugins() {
     setError("");
@@ -418,7 +519,7 @@ export function App() {
                     embeddedLaunch.app_id}
                 </h3>
                 <small>
-                  iframe · {embeddedLaunch.allowed_origins.join(", ")}
+                  iframe · {bridgeState === "ready" ? "Context Bridge 已连接" : "等待应用握手"}
                 </small>
               </div>
               <div className="embeddedActions">
@@ -444,7 +545,8 @@ export function App() {
             </div>
             <div className="iframeFrame">
               <iframe
-                src={embeddedLaunch.url}
+                ref={embeddedFrameRef}
+                src={buildEmbeddedUrl(embeddedLaunch.url, window.location.origin)}
                 title={embeddedLaunch.app_id}
                 sandbox="allow-forms allow-modals allow-popups allow-popups-to-escape-sandbox allow-same-origin allow-scripts allow-downloads"
                 referrerPolicy="strict-origin-when-cross-origin"

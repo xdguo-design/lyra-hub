@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lyra.local/contracts/workspace-context-v1.schema.json",
+  "title": "Lyra Workspace Context v1",
+  "type": "object",
+  "required": ["mode", "appId", "locale", "theme", "identity", "capabilities"],
+  "properties": {
+    "mode": { "const": "workspace" },
+    "appId": { "type": "string", "minLength": 1 },
+    "locale": { "type": "string", "minLength": 2 },
+    "theme": { "enum": ["light", "dark"] },
+    "identity": {
+      "type": "object",
+      "required": ["authenticated", "user", "tenant", "roles"],
+      "properties": {
+        "authenticated": { "type": "boolean" },
+        "user": {
+          "type": ["object", "null"],
+          "properties": {
+            "id": { "type": "string" },
+            "displayName": { "type": "string" }
+          },
+          "required": ["id"],
+          "additionalProperties": false
+        },
+        "tenant": {
+          "type": ["object", "null"],
+          "properties": {
+            "id": { "type": "string" },
+            "name": { "type": "string" }
+          },
+          "required": ["id"],
+          "additionalProperties": false
+        },
+        "roles": { "type": "array", "items": { "type": "string" }, "uniqueItems": true }
+      },
+      "additionalProperties": false
+    },
+    "capabilities": {
+      "type": "array",
+      "items": { "type": "string" },
+      "uniqueItems": true
+    }
+  },
+  "additionalProperties": false
+}
