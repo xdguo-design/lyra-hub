@@ -39,3 +39,14 @@ A business application MUST remain independently runnable. Joining Lyra Hub adds
 - dev — active integration branch
 
 Development changes land on dev first and are promoted to main after regression verification.
+
+
+## Integration modes
+
+- Workspace UI: iframe + Workspace Context Bridge v1 (`postMessage`)
+- Program/service integration: REST + OpenAPI + per-application Bearer authentication
+- AI tool integration: MCP adapter planned
+- Agent-to-agent integration: A2A adapter planned
+- Async cross-application integration: CloudEvents-compatible delivery planned
+
+See `docs/architecture/program-integration-v1.md`.

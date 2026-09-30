@@ -20,7 +20,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: xdguo-design/lyra-narrative
-          ref: dev
+          ref: main
           path: _integration/lyra-narrative
 
       - uses: actions/setup-python@v5
