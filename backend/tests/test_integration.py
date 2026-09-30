@@ -103,3 +103,18 @@ def test_external_api_is_disabled_until_app_token_is_configured(tmp_path) -> Non
         headers={"Authorization": "Bearer anything"},
     )
     assert response.status_code == 503
+
+
+
+def test_openapi_exposes_bearer_security_for_external_integrations(tmp_path) -> None:
+    client = _integration_client(tmp_path)
+    schema = client.get("/openapi.json").json()
+
+    security_schemes = schema["components"]["securitySchemes"]
+    assert "HTTPBearer" in security_schemes
+    assert security_schemes["HTTPBearer"]["scheme"] == "bearer"
+
+    operation = schema["paths"][
+        "/api/v1/integration/apps/{app_id}/capabilities/{capability}/invoke"
+    ]["post"]
+    assert {"HTTPBearer": []} in operation["security"]
