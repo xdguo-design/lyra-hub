@@ -106,6 +106,19 @@ def invoke_application_capability(
     if application is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Application not found")
 
+    if not tokens.is_configured(app_id):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="External integration token is not configured for this application",
+        )
+    if not tokens.verify_bearer(app_id, authorization):
+        response.headers["WWW-Authenticate"] = "Bearer"
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid application integration token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
     with database.session() as session:
         state_record = session.get(ApplicationStateRecord, app_id)
         if state_record is not None and not state_record.enabled:
@@ -118,19 +131,6 @@ def invoke_application_capability(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Capability is not declared by this application",
-        )
-
-    if not tokens.is_configured(app_id):
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="External integration token is not configured for this application",
-        )
-    if not tokens.verify_bearer(app_id, authorization):
-        response.headers["WWW-Authenticate"] = "Bearer"
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid application integration token",
-            headers={"WWW-Authenticate": "Bearer"},
         )
 
     catalog = {item["name"]: item for item in services.capabilities()}
