@@ -14,7 +14,7 @@ class IntegrationTokenRegistry:
         }
 
     @classmethod
-    def from_env(cls) -> "IntegrationTokenRegistry":
+    def from_env(cls) -> IntegrationTokenRegistry:
         raw = os.getenv("LYRA_APP_TOKENS_JSON", "").strip()
         if not raw:
             return cls()
