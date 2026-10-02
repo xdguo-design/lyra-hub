@@ -133,6 +133,20 @@ class EventService:
         with self.database.session() as session:
             existing = session.get(EventRecord, event_id)
             if existing is not None:
+                same_event = (
+                    existing.event_type == event_type
+                    and existing.event_version == event_version
+                    and existing.source_type == source_type
+                    and existing.source_id == source_id
+                    and existing.tenant_id == tenant_id
+                    and existing.actor_id == actor_id
+                    and existing.subject == subject
+                    and existing.correlation_id == correlation_id
+                    and existing.causation_id == causation_id
+                    and existing.data == data
+                )
+                if not same_event:
+                    raise ValueError("event_id_conflict")
                 delivery_count = len(
                     session.scalars(
                         select(EventDeliveryRecord).where(
