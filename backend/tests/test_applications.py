@@ -152,17 +152,28 @@ def test_gateway_and_agent_os_capabilities_are_invoked_through_hub(tmp_path) -> 
                     "output": {"write": {"final_response": "chapter"}},
                 },
             )
-        if host == "print.local" and path == "/api/print-tasks":
-            assert request.headers["X-Print-Api-Key"] == "print-operator-key"
-            return httpx.Response(
-                201,
-                json={"id": "PT-1", "status": "CREATED", "businessKey": "demo-1"},
-            )
-        if host == "print.local" and path == "/api/print-tasks/PT-1/queue":
-            assert request.headers["X-Print-Api-Key"] == "print-operator-key"
+        if host == "print.local" and path == "/api/lyra/capabilities/print.execute":
+            assert request.headers["Authorization"] == "Bearer print-provider-token"
+            request_body = __import__("json").loads(request.content.decode())
+            assert request_body["payload"]["businessKey"] == "demo-1"
             return httpx.Response(
                 200,
-                json={"id": "PT-1", "status": "QUEUED", "businessKey": "demo-1"},
+                json={
+                    "capability": "print.execute",
+                    "result": {
+                        "task": {
+                            "id": "PT-1",
+                            "status": "CREATED",
+                            "businessKey": "demo-1",
+                        },
+                        "queued": True,
+                        "queue_result": {
+                            "id": "PT-1",
+                            "status": "QUEUED",
+                            "businessKey": "demo-1",
+                        },
+                    },
+                },
             )
         return httpx.Response(404, json={"detail": "not mocked"})
 
@@ -180,6 +191,7 @@ def test_gateway_and_agent_os_capabilities_are_invoked_through_hub(tmp_path) -> 
         database_url=f"sqlite:///{tmp_path / 'platform-test.db'}",
         platform_settings=settings,
         platform_transport=httpx.MockTransport(handler),
+        provider_tokens={"lyra-print": "print-provider-token"},
     )
     test_client = TestClient(app)
 
