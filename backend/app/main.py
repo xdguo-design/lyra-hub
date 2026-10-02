@@ -7,10 +7,11 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 
-from app.api.routes import applications, audit, capabilities, integration, page_configuration, plugins
+from app.api.routes import applications, audit, capabilities, events, integration, page_configuration, plugins
 from app.domain.applications.registry import ManifestRegistry
 from app.domain.plugins.registry import PluginRegistry
 from app.infrastructure.database import Database
+from app.infrastructure.events import EventService, WebhookSecretRegistry
 from app.infrastructure.integration_auth import IntegrationTokenRegistry
 from app.infrastructure.platforms import PlatformServices, PlatformSettings
 
@@ -21,6 +22,8 @@ def create_app(
     platform_settings: PlatformSettings | None = None,
     platform_transport: httpx.BaseTransport | None = None,
     integration_tokens: dict[str, str] | None = None,
+    webhook_secrets: dict[str, str] | None = None,
+    event_transport: httpx.BaseTransport | None = None,
 ) -> FastAPI:
     resolved_root = repo_root or Path(__file__).resolve().parents[2]
     registry = ManifestRegistry(resolved_root)
@@ -32,6 +35,16 @@ def create_app(
         IntegrationTokenRegistry(integration_tokens)
         if integration_tokens is not None
         else IntegrationTokenRegistry.from_env()
+    )
+    webhook_secret_registry = (
+        WebhookSecretRegistry(webhook_secrets)
+        if webhook_secrets is not None
+        else WebhookSecretRegistry.from_env()
+    )
+    event_service = EventService(
+        database,
+        secrets=webhook_secret_registry,
+        transport=event_transport,
     )
 
     api = FastAPI(
@@ -60,6 +73,8 @@ def create_app(
     api.dependency_overrides[integration.get_database] = lambda: database
     api.dependency_overrides[integration.get_platform_services] = lambda: platform_services
     api.dependency_overrides[integration.get_token_registry] = lambda: integration_token_registry
+    api.dependency_overrides[integration.get_event_service] = lambda: event_service
+    api.dependency_overrides[events.get_event_service] = lambda: event_service
 
     @api.get("/health", tags=["system"])
     def health() -> dict[str, str]:
@@ -82,6 +97,7 @@ def create_app(
     api.include_router(audit.router, prefix="/api/v1")
     api.include_router(plugins.router, prefix="/api/v1")
     api.include_router(integration.router, prefix="/api/v1")
+    api.include_router(events.router, prefix="/api/v1")
     return api
 
 

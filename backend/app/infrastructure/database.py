@@ -112,6 +112,82 @@ class AuditEventRecord(Base):
         return json.loads(self.payload_json)
 
 
+class EventRecord(Base):
+    __tablename__ = "event_record"
+
+    event_id: Mapped[str] = mapped_column(String(120), primary_key=True)
+    event_type: Mapped[str] = mapped_column(String(160), nullable=False, index=True)
+    event_version: Mapped[str] = mapped_column(String(32), nullable=False, default="1.0")
+    occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    source_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    source_id: Mapped[str] = mapped_column(String(120), nullable=False, index=True)
+    tenant_id: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    actor_id: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    subject: Mapped[str | None] = mapped_column(String(240), nullable=True)
+    correlation_id: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+    causation_id: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    data_json: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(UTC),
+        index=True,
+    )
+
+    @property
+    def data(self) -> dict[str, Any]:
+        value = json.loads(self.data_json)
+        return value if isinstance(value, dict) else {}
+
+
+class EventSubscriptionRecord(Base):
+    __tablename__ = "event_subscription"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    subscriber_id: Mapped[str] = mapped_column(String(120), nullable=False, index=True)
+    event_type: Mapped[str] = mapped_column(String(160), nullable=False, index=True)
+    endpoint_url: Mapped[str] = mapped_column(String(1000), nullable=False)
+    secret_ref: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    max_attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=5)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(UTC),
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
+    )
+
+
+class EventDeliveryRecord(Base):
+    __tablename__ = "event_delivery"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    event_id: Mapped[str] = mapped_column(String(120), nullable=False, index=True)
+    subscription_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="pending", index=True)
+    attempt_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    last_status_code: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    next_attempt_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+    delivered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(UTC),
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
+    )
+
+
 class Database:
     def __init__(self, url: str | None = None) -> None:
         self.url = url or os.getenv("LYRA_HUB_DATABASE_URL", "sqlite:///./lyra-hub.db")
