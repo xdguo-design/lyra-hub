@@ -120,6 +120,10 @@ def test_page_configuration_controls_order_visibility_roles_and_launch_mode(clie
 
 
 def test_gateway_and_agent_os_capabilities_are_invoked_through_hub(tmp_path) -> None:
+    shared_root = tmp_path / "shared"
+    shared_root.mkdir()
+    (shared_root / "handoff.md").write_text("shared handoff", encoding="utf-8")
+
     def handler(request: httpx.Request) -> httpx.Response:
         host = request.url.host
         path = request.url.path
@@ -170,6 +174,7 @@ def test_gateway_and_agent_os_capabilities_are_invoked_through_hub(tmp_path) -> 
         agent_runtime_token="runtime-token",
         print_url="https://print.local",
         print_api_key="print-operator-key",
+        shared_files_root=str(shared_root),
     )
     app = create_app(
         database_url=f"sqlite:///{tmp_path / 'platform-test.db'}",
@@ -205,6 +210,10 @@ def test_gateway_and_agent_os_capabilities_are_invoked_through_hub(tmp_path) -> 
             }
         },
     )
+    shared_file = test_client.post(
+        "/api/v1/capabilities/file.read/invoke",
+        json={"payload": {"path": "handoff.md"}},
+    )
     printed = test_client.post(
         "/api/v1/capabilities/print.execute/invoke",
         json={
@@ -222,6 +231,8 @@ def test_gateway_and_agent_os_capabilities_are_invoked_through_hub(tmp_path) -> 
     assert generated.json()["result"]["choices"][0]["message"]["content"] == "ok"
     assert executed.json()["result"]["status"] == "succeeded"
     assert workflow.json()["result"]["status"] == "succeeded"
+    assert shared_file.json()["result"]["content"] == "shared handoff"
+    assert shared_file.json()["result"]["path"] == "handoff.md"
     assert printed.json()["result"]["task"]["id"] == "PT-1"
     assert printed.json()["result"]["queued"] is True
     assert printed.json()["result"]["queue_result"]["status"] == "QUEUED"
@@ -229,6 +240,8 @@ def test_gateway_and_agent_os_capabilities_are_invoked_through_hub(tmp_path) -> 
     capabilities = test_client.get("/api/v1/capabilities").json()["data"]
     by_capability = {item["name"]: item for item in capabilities}
     assert by_capability["workflow.run"]["reachable"] is True
+    assert by_capability["file.read"]["source"] == "hub"
+    assert by_capability["file.read"]["reachable"] is True
     assert by_capability["print.execute"]["source"] == "lyra-print"
     assert by_capability["print.execute"]["reachable"] is True
 
@@ -243,4 +256,6 @@ def test_gateway_and_agent_os_capabilities_are_invoked_through_hub(tmp_path) -> 
     assert by_key[("lyra-narrative", "agent.run")]["status"] == "available"
     assert by_key[("lyra-narrative", "workflow.run")]["status"] == "available"
     assert by_key[("lyra-print", "workflow.run")]["status"] == "available"
+    assert by_key[("lyra-print", "file.read")]["status"] == "available"
+    assert by_key[("lyra-narrative", "file.read")]["status"] == "available"
     assert by_key[("hospital-ai", "knowledge.search")]["status"] == "missing"

@@ -72,7 +72,7 @@ There are three categories:
 
 - Platform capabilities: owned by Lyra Gateway or Agent OS and routed by Hub. Existing examples include `model.generate`, `agent.run`, `workflow.compile`, and `workflow.run`.
 - Application-provided capabilities: declared by an application such as `print.execute`. Lyra Print is the first implemented application adapter; Hub creates the task through the Print API and queues it by default.
-- Shared data capabilities: examples include `file.read` and knowledge access. These should be backed by a dedicated storage/knowledge service instead of direct filesystem access from arbitrary applications.
+- Shared data capabilities: `file.read` is backed by an explicitly configured shared handoff directory; knowledge access still requires a dedicated knowledge service.
 
 A Manifest declaration is permission intent, not proof that the capability is currently routable. `/api/v1/capability-dependencies` remains the runtime availability view.
 
@@ -180,3 +180,20 @@ Settings:
 - `LYRA_EVENT_WORKER_LEASE_SECONDS` — stale `delivering` lease recovery threshold, default 300 seconds.
 
 Multiple workers may poll the same database. A conditional database update claims each row before delivery, so a fresh lease is not sent twice. If a process dies after claiming a row, another worker can reclaim it after the lease timeout.
+
+
+### Shared file handoff
+
+`file.read` is intentionally not an arbitrary host filesystem API. It is disabled until `LYRA_SHARED_FILES_ROOT` points to a dedicated cross-application handoff directory.
+
+The adapter enforces:
+
+- relative paths only;
+- no `.`, `..`, or hidden path segments;
+- resolved paths must remain under the configured root, including through symlinks;
+- regular files only;
+- a configurable size limit via `LYRA_SHARED_FILE_MAX_BYTES`;
+- UTF-8 text only;
+- SHA-256 returned with the content for integrity checks.
+
+The shared directory must contain only artifacts explicitly intended for cross-application exchange. Business-private files, credentials, patient data, repository source trees, and application databases must remain outside this root.
