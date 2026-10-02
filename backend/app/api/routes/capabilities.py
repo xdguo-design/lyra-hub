@@ -52,9 +52,14 @@ def list_capabilities(services: PlatformServices = Depends(get_platform_services
     status_by_id = {item.id: item for item in services.status()}
     items = []
     for item in services.capabilities():
-        service_id = "gateway" if item["source"] == "gateway" else "agent-os"
-        service_status = status_by_id[service_id]
-        items.append({**item, "reachable": service_status.reachable})
+        service_id = str(item["service_id"])
+        service_status = status_by_id.get(service_id)
+        items.append(
+            {
+                **item,
+                "reachable": bool(service_status and service_status.reachable),
+            }
+        )
     return {"data": items}
 
 
@@ -112,7 +117,7 @@ def capability_dependencies(
                 continue
 
             source = str(definition["source"])
-            service_id = "gateway" if source == "gateway" else "agent-os"
+            service_id = str(definition["service_id"])
             data.append(
                 {
                     "application_id": application.id,
