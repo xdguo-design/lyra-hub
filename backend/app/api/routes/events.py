@@ -5,12 +5,42 @@ from datetime import datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import AnyHttpUrl, BaseModel, Field
 
+from app.infrastructure.admin_auth import AdminTokenAuth
 from app.infrastructure.database import EventDeliveryRecord, EventSubscriptionRecord
 from app.infrastructure.events import EventService, event_envelope
 
-router = APIRouter(prefix="/events", tags=["events"])
+admin_bearer_scheme = HTTPBearer(auto_error=False)
+
+
+def get_admin_auth() -> AdminTokenAuth:
+    raise RuntimeError("Admin auth dependency was not configured")
+
+
+def require_admin(
+    credentials: HTTPAuthorizationCredentials | None = Depends(admin_bearer_scheme),
+    auth: AdminTokenAuth = Depends(get_admin_auth),
+) -> None:
+    if not auth.configured:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Hub admin token is not configured",
+        )
+    if not auth.verify(credentials):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid Hub admin token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+
+router = APIRouter(
+    prefix="/events",
+    tags=["events"],
+    dependencies=[Depends(require_admin)],
+)
 
 EVENT_TYPE_PATTERN = r"^[a-z][a-z0-9-]*(\.[a-z][a-z0-9-]*)*$"
 
