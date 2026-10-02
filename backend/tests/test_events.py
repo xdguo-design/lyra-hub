@@ -105,6 +105,7 @@ def test_failed_webhook_moves_from_retry_to_dead_letter(tmp_path) -> None:
         create_app(
             database_url=f"sqlite:///{tmp_path / 'events-retry.db'}",
             integration_tokens={"lyra-narrative": "narrative-token"},
+            webhook_secrets={"retry-secret": "retry-signing-key"},
             event_transport=httpx.MockTransport(handler),
         )
     )
@@ -114,6 +115,7 @@ def test_failed_webhook_moves_from_retry_to_dead_letter(tmp_path) -> None:
             "subscriber_id": "failing-receiver",
             "event_type": "chapter.completed",
             "endpoint_url": "https://receiver.local/events",
+            "secret_ref": "retry-secret",
             "max_attempts": 2,
         },
     )
