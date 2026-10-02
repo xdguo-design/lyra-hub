@@ -49,3 +49,7 @@ permissions:
 health:
   url: http://127.0.0.1:8080/health
   timeoutMs: 5000
+
+service:
+  baseUrl: http://127.0.0.1:8080
+  capabilityPath: /api/lyra/capabilities/{capability}
