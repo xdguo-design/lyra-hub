@@ -301,6 +301,7 @@ class EventService:
                     ),
                 )
                 .values(status="delivering", updated_at=now)
+                .execution_options(synchronize_session=False)
             )
             if claim.rowcount != 1:
                 session.rollback()
