@@ -23,6 +23,7 @@ def create_app(
     platform_transport: httpx.BaseTransport | None = None,
     integration_tokens: dict[str, str] | None = None,
     provider_tokens: dict[str, str] | None = None,
+    provider_base_urls: dict[str, str] | None = None,
     webhook_secrets: dict[str, str] | None = None,
     event_transport: httpx.BaseTransport | None = None,
 ) -> FastAPI:
@@ -36,6 +37,7 @@ def create_app(
         platform_transport,
         application_registry=registry,
         provider_tokens=provider_tokens,
+        provider_base_urls=provider_base_urls,
     )
     integration_token_registry = (
         IntegrationTokenRegistry(integration_tokens)
