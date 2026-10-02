@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import datetime
+import re
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -93,18 +94,12 @@ def create_subscription(
     service: EventService = Depends(get_event_service),
 ) -> EventSubscriptionResponse:
     event_type = request.event_type.strip().lower()
-    if event_type != "*" and not (
-        event_type.endswith(".*")
-        and len(event_type) > 2
-        and all(part for part in event_type[:-2].split("."))
-    ):
-        import re
-
-        if re.fullmatch(EVENT_TYPE_PATTERN, event_type) is None:
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail="Invalid event type pattern",
-            )
+    candidate = event_type[:-2] if event_type.endswith(".*") else event_type
+    if event_type != "*" and re.fullmatch(EVENT_TYPE_PATTERN, candidate) is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Invalid event type pattern",
+        )
 
     record = service.create_subscription(
         subscriber_id=request.subscriber_id.strip(),
