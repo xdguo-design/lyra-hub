@@ -24,6 +24,10 @@ class EventSubscriptionCreate(BaseModel):
     max_attempts: int = Field(default=5, ge=1, le=20)
 
 
+class EventSubscriptionUpdate(BaseModel):
+    enabled: bool
+
+
 class EventSubscriptionResponse(BaseModel):
     id: int
     subscriber_id: str
@@ -117,6 +121,22 @@ def list_subscriptions(
     service: EventService = Depends(get_event_service),
 ) -> list[EventSubscriptionResponse]:
     return [_subscription_response(item) for item in service.list_subscriptions()]
+
+
+@router.patch("/subscriptions/{subscription_id}", response_model=EventSubscriptionResponse)
+def update_subscription(
+    subscription_id: int,
+    request: EventSubscriptionUpdate,
+    service: EventService = Depends(get_event_service),
+) -> EventSubscriptionResponse:
+    try:
+        record = service.set_subscription_enabled(subscription_id, request.enabled)
+    except KeyError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Event subscription not found",
+        ) from exc
+    return _subscription_response(record)
 
 
 @router.get("")
