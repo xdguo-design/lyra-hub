@@ -124,6 +124,8 @@ def test_gateway_and_agent_os_capabilities_are_invoked_through_hub(tmp_path) -> 
         host = request.url.host
         path = request.url.path
         if path == "/health":
+            if host == "print.local":
+                return httpx.Response(200, json={"status": "UP"})
             return httpx.Response(200, json={"status": "ok"})
         if host == "gateway.local" and path == "/v1/models":
             assert request.headers["X-Free-LLM-Token"] == "gateway-token"
@@ -136,6 +138,28 @@ def test_gateway_and_agent_os_capabilities_are_invoked_through_hub(tmp_path) -> 
         if host == "agents.local" and path == "/api/runtime/execute":
             assert request.headers["Authorization"] == "Bearer runtime-token"
             return httpx.Response(200, json={"status": "succeeded", "final_response": "done"})
+        if host == "agents.local" and path == "/api/workflows/run":
+            assert request.headers["Authorization"] == "Bearer agent-token"
+            return httpx.Response(
+                200,
+                json={
+                    "execution_id": "workflow-1",
+                    "status": "succeeded",
+                    "output": {"write": {"final_response": "chapter"}},
+                },
+            )
+        if host == "print.local" and path == "/api/print-tasks":
+            assert request.headers["X-Print-Api-Key"] == "print-operator-key"
+            return httpx.Response(
+                201,
+                json={"id": "PT-1", "status": "CREATED", "businessKey": "demo-1"},
+            )
+        if host == "print.local" and path == "/api/print-tasks/PT-1/queue":
+            assert request.headers["X-Print-Api-Key"] == "print-operator-key"
+            return httpx.Response(
+                200,
+                json={"id": "PT-1", "status": "QUEUED", "businessKey": "demo-1"},
+            )
         return httpx.Response(404, json={"detail": "not mocked"})
 
     settings = PlatformSettings(
@@ -144,6 +168,8 @@ def test_gateway_and_agent_os_capabilities_are_invoked_through_hub(tmp_path) -> 
         agent_os_url="https://agents.local",
         agent_os_token="agent-token",
         agent_runtime_token="runtime-token",
+        print_url="https://print.local",
+        print_api_key="print-operator-key",
     )
     app = create_app(
         database_url=f"sqlite:///{tmp_path / 'platform-test.db'}",
@@ -166,10 +192,45 @@ def test_gateway_and_agent_os_capabilities_are_invoked_through_hub(tmp_path) -> 
         "/api/v1/capabilities/agent.run/invoke",
         json={"payload": {"prompt": "do work", "agent_id": "writer"}},
     )
+    workflow = test_client.post(
+        "/api/v1/capabilities/workflow.run/invoke",
+        json={
+            "payload": {
+                "id": "novel",
+                "version": "1",
+                "name": "Novel",
+                "project_session_id": "p1",
+                "workspace": "/workspace",
+                "steps": [{"id": "write", "agent_id": "writer"}],
+            }
+        },
+    )
+    printed = test_client.post(
+        "/api/v1/capabilities/print.execute/invoke",
+        json={
+            "payload": {
+                "kind": "template",
+                "businessKey": "demo-1",
+                "printerId": "printer-1",
+                "templateCode": "receipt",
+                "inputData": {"name": "Lyra"},
+            }
+        },
+    )
     assert models.json()["result"]["data"][0]["id"] == "auto"
     assert agents.json()["result"]["items"][0]["id"] == "writer"
     assert generated.json()["result"]["choices"][0]["message"]["content"] == "ok"
     assert executed.json()["result"]["status"] == "succeeded"
+    assert workflow.json()["result"]["status"] == "succeeded"
+    assert printed.json()["result"]["task"]["id"] == "PT-1"
+    assert printed.json()["result"]["queued"] is True
+    assert printed.json()["result"]["queue_result"]["status"] == "QUEUED"
+
+    capabilities = test_client.get("/api/v1/capabilities").json()["data"]
+    by_capability = {item["name"]: item for item in capabilities}
+    assert by_capability["workflow.run"]["reachable"] is True
+    assert by_capability["print.execute"]["source"] == "lyra-print"
+    assert by_capability["print.execute"]["reachable"] is True
 
     dependencies = test_client.get("/api/v1/capability-dependencies")
     assert dependencies.status_code == 200
@@ -180,5 +241,6 @@ def test_gateway_and_agent_os_capabilities_are_invoked_through_hub(tmp_path) -> 
     }
     assert by_key[("lyra-narrative", "model.generate")]["status"] == "available"
     assert by_key[("lyra-narrative", "agent.run")]["status"] == "available"
-    assert by_key[("lyra-narrative", "workflow.run")]["status"] == "missing"
+    assert by_key[("lyra-narrative", "workflow.run")]["status"] == "available"
+    assert by_key[("lyra-print", "workflow.run")]["status"] == "available"
     assert by_key[("hospital-ai", "knowledge.search")]["status"] == "missing"
