@@ -160,3 +160,66 @@ jobs:
         run: |
           cat /tmp/print-backend.log || true
           cat /tmp/print-frontend.log || true
+
+
+  agent-os:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Hub
+        uses: actions/checkout@v4
+
+      - name: Checkout Agent OS
+        uses: actions/checkout@v4
+        with:
+          repository: xdguo-design/lyra-agents
+          ref: dev
+          path: _integration/lyra-agents
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: _integration/lyra-agents/pyproject.toml
+
+      - name: Install Agent OS
+        working-directory: _integration/lyra-agents
+        run: pip install -e .
+
+      - name: Start Agent OS
+        working-directory: _integration/lyra-agents
+        env:
+          LYRA_DATABASE_URL: sqlite:////tmp/lyra-hub-agents.db
+        run: |
+          python -m uvicorn lyra_agents.main:app --host 127.0.0.1 --port 18770 > /tmp/agents.log 2>&1 &
+          echo $! > /tmp/agents.pid
+
+      - name: Verify Agent OS Hub contract
+        run: |
+          python - <<'PY'
+          import json, time, urllib.request
+
+          def get(url):
+              for _ in range(40):
+                  try:
+                      with urllib.request.urlopen(url, timeout=2) as response:
+                          return response.status, response.read().decode()
+                  except Exception:
+                      time.sleep(.25)
+              raise SystemExit(f"unreachable: {url}")
+
+          status, body = get("http://127.0.0.1:18770/health")
+          assert status == 200
+          assert json.loads(body)["status"] == "ok"
+
+          status, body = get("http://127.0.0.1:18770/openapi.json")
+          assert status == 200
+          paths = json.loads(body)["paths"]
+          assert "/api/workflows/compile-preview" in paths
+          assert "/api/workflows/run" in paths
+          assert "/api/runtime/execute" in paths
+          print("Agent OS Hub integration contract OK")
+          PY
+
+      - name: Dump Agent OS log on failure
+        if: failure()
+        run: cat /tmp/agents.log || true
