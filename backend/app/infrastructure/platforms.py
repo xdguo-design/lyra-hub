@@ -269,6 +269,7 @@ class ApplicationProviderAdapter:
 
     def definitions(self) -> list[dict[str, Any]]:
         items: list[dict[str, Any]] = []
+        owners: dict[str, str] = {}
         for summary in self.registry.list():
             detail = self.registry.get(summary.id)
             if detail is None or not detail.capabilities_provided:
@@ -284,6 +285,13 @@ class ApplicationProviderAdapter:
             if not base_url:
                 continue
             for capability in detail.capabilities_provided:
+                previous_owner = owners.get(capability)
+                if previous_owner is not None and previous_owner != detail.id:
+                    raise RuntimeError(
+                        f"capability provider collision: {capability} is provided by "
+                        f"{previous_owner} and {detail.id}"
+                    )
+                owners[capability] = detail.id
                 items.append(
                     {
                         "name": capability,
@@ -349,7 +357,11 @@ class ApplicationProviderAdapter:
     def invoke(self, definition: dict[str, Any], payload: dict[str, Any]) -> dict[str, Any]:
         app_id = str(definition["source"])
         token = self.tokens.get(app_id, "")
-        headers = {"Authorization": f"Bearer {token}"} if token else {}
+        if not token:
+            raise ValueError(
+                f"provider token is not configured for application {app_id}"
+            )
+        headers = {"Authorization": f"Bearer {token}"}
         path = str(definition["capability_path"]).replace(
             "{capability}",
             str(definition["name"]),
