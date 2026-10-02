@@ -9,7 +9,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import httpx
-from sqlalchemy import select
+from sqlalchemy import or_, select, update
 
 from app.infrastructure.database import (
     Database,
@@ -215,13 +215,104 @@ class EventService:
         with self.database.session() as session:
             return list(session.scalars(query).all())
 
-    def attempt_delivery(self, delivery_id: int) -> EventDeliveryRecord:
+    def due_delivery_ids(
+        self,
+        *,
+        limit: int = 50,
+        lease_seconds: int = 300,
+    ) -> list[int]:
+        now = datetime.now(UTC)
+        stale_before = now - timedelta(seconds=max(1, lease_seconds))
+        with self.database.session() as session:
+            rows = session.scalars(
+                select(EventDeliveryRecord.id)
+                .where(
+                    or_(
+                        EventDeliveryRecord.status == "pending",
+                        (
+                            (EventDeliveryRecord.status == "retry")
+                            & (EventDeliveryRecord.next_attempt_at <= now)
+                        ),
+                        (
+                            (EventDeliveryRecord.status == "delivering")
+                            & (EventDeliveryRecord.updated_at <= stale_before)
+                        ),
+                    )
+                )
+                .order_by(EventDeliveryRecord.id)
+                .limit(max(1, limit))
+            ).all()
+            return [int(item) for item in rows]
+
+    def process_due_deliveries(
+        self,
+        *,
+        limit: int = 50,
+        lease_seconds: int = 300,
+    ) -> dict[str, int]:
+        summary = {
+            "selected": 0,
+            "delivered": 0,
+            "retry": 0,
+            "dead": 0,
+            "skipped": 0,
+        }
+        delivery_ids = self.due_delivery_ids(
+            limit=limit,
+            lease_seconds=lease_seconds,
+        )
+        summary["selected"] = len(delivery_ids)
+        for delivery_id in delivery_ids:
+            delivery = self.attempt_delivery(
+                delivery_id,
+                lease_seconds=lease_seconds,
+            )
+            if delivery.status in summary:
+                summary[delivery.status] += 1
+            else:
+                summary["skipped"] += 1
+        return summary
+
+    def attempt_delivery(
+        self,
+        delivery_id: int,
+        *,
+        lease_seconds: int = 300,
+    ) -> EventDeliveryRecord:
+        now = datetime.now(UTC)
+        stale_before = now - timedelta(seconds=max(1, lease_seconds))
         with self.database.session() as session:
             delivery = session.get(EventDeliveryRecord, delivery_id)
             if delivery is None:
                 raise KeyError("delivery_not_found")
-            if delivery.status == "delivered":
+            if delivery.status in {"delivered", "dead"}:
                 return delivery
+
+            claim = session.execute(
+                update(EventDeliveryRecord)
+                .where(
+                    EventDeliveryRecord.id == delivery_id,
+                    or_(
+                        EventDeliveryRecord.status.in_(["pending", "retry"]),
+                        (
+                            (EventDeliveryRecord.status == "delivering")
+                            & (EventDeliveryRecord.updated_at <= stale_before)
+                        ),
+                    ),
+                )
+                .values(status="delivering", updated_at=now)
+                .execution_options(synchronize_session=False)
+            )
+            if claim.rowcount != 1:
+                session.rollback()
+                current = session.get(EventDeliveryRecord, delivery_id)
+                if current is None:
+                    raise KeyError("delivery_not_found")
+                return current
+            session.commit()
+            delivery = session.get(EventDeliveryRecord, delivery_id)
+            if delivery is None:
+                raise KeyError("delivery_not_found")
 
             event = session.get(EventRecord, delivery.event_id)
             subscription = session.get(EventSubscriptionRecord, delivery.subscription_id)

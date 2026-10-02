@@ -155,4 +155,28 @@ Subscription event types support exact matches, `prefix.*`, and `*`.
 
 Every webhook subscription requires a `secret_ref`. The actual secret is injected through `LYRA_WEBHOOK_SECRETS_JSON` and is never stored in the database. Hub signs the exact JSON request body with HMAC-SHA256 in `X-Lyra-Signature: sha256=<digest>`.
 
-Failed deliveries use bounded exponential backoff metadata and move to `dead` after the configured maximum attempts. Delivery attempts are explicit in v1 so deployment does not require a background worker. A later worker or broker adapter can consume the same persisted outbox without changing application contracts.
+Failed deliveries use bounded exponential backoff metadata and move to `dead` after the configured maximum attempts. The `lyra-hub-events` worker continuously consumes due outbox rows. It atomically leases each delivery before network I/O, respects retry schedules, and reclaims stale `delivering` leases after the configured timeout. The explicit delivery-attempt endpoint remains available for operations and testing. A future broker adapter can consume the same persisted outbox without changing application contracts.
+
+
+### Event delivery worker
+
+Run continuously:
+
+```bash
+cd backend
+lyra-hub-events
+```
+
+Run one batch, useful for cron or deployment smoke tests:
+
+```bash
+lyra-hub-events --once
+```
+
+Settings:
+
+- `LYRA_EVENT_WORKER_POLL_SECONDS` — idle polling interval, default 5 seconds.
+- `LYRA_EVENT_WORKER_BATCH_SIZE` — maximum due deliveries selected per pass, default 50.
+- `LYRA_EVENT_WORKER_LEASE_SECONDS` — stale `delivering` lease recovery threshold, default 300 seconds.
+
+Multiple workers may poll the same database. A conditional database update claims each row before delivery, so a fresh lease is not sent twice. If a process dies after claiming a row, another worker can reclaim it after the lease timeout.
