@@ -70,8 +70,8 @@ The child application validates the Hub origin and parent window. The Hub valida
 
 There are three categories:
 
-- Platform capabilities: owned by Lyra Gateway or Agent OS and routed by Hub. Existing examples include `model.generate`, `agent.run`, and `workflow.compile`.
-- Application-provided capabilities: declared by an application such as `print.execute`. These need an application adapter/endpoint registry and are the next implementation slice.
+- Platform capabilities: owned by Lyra Gateway or Agent OS and routed by Hub. Existing examples include `model.generate`, `agent.run`, `workflow.compile`, and `workflow.run`.
+- Application-provided capabilities: declared by an application such as `print.execute`. Lyra Print is the first implemented application adapter; Hub creates the task through the Print API and queues it by default.
 - Shared data capabilities: examples include `file.read` and knowledge access. These should be backed by a dedicated storage/knowledge service instead of direct filesystem access from arbitrary applications.
 
 A Manifest declaration is permission intent, not proof that the capability is currently routable. `/api/v1/capability-dependencies` remains the runtime availability view.
@@ -111,3 +111,25 @@ The v1 per-application static token is suitable for the current local/integratio
 - propagate correlation IDs through Hub, Gateway, Agent OS, and application calls;
 - sign outbound webhooks and protect against replay;
 - restrict CORS separately from server-to-server authorization.
+
+
+### Lyra Print capability adapter
+
+`print.execute` is routed to the independently deployed Lyra Print backend.
+
+Hub settings:
+
+- `LYRA_PRINT_URL`
+- `LYRA_PRINT_API_KEY`
+
+Payload contract:
+
+- `kind`: `template` (default), `pdf`, or `raw`;
+- `queue`: boolean, defaults to `true`;
+- remaining fields are passed to the matching Lyra Print task creation endpoint.
+
+The adapter first creates the task and, when `queue=true`, calls the task queue endpoint. The Print API key stays server-side in Hub.
+
+### Agent OS workflow execution
+
+`workflow.run` is routed to Agent OS `POST /api/workflows/run`. Agent OS compiles the submitted workflow with its governed registry and executes the pinned plan through the existing WorkflowExecutor. Hub does not duplicate workflow scheduling.
