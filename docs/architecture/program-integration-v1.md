@@ -14,7 +14,7 @@ Lyra Hub supports more than one integration shape. A business program stays inde
 | Call Hub capabilities from another backend/service | REST + OpenAPI + per-application Bearer token | implemented |
 | Expose tools/resources to AI hosts | MCP adapter | planned |
 | Coordinate an independent remote AI agent | A2A adapter | planned |
-| Publish asynchronous cross-application events | CloudEvents-compatible webhook/event bus | planned |
+| Publish asynchronous cross-application events | CloudEvents-compatible event outbox + signed webhooks | implemented |
 
 Do not require every application to implement MCP or A2A. Normal business services should use REST/OpenAPI. AI-specific protocols should be adapters at the Hub boundary.
 
@@ -133,3 +133,26 @@ The adapter first creates the task and, when `queue=true`, calls the task queue 
 ### Agent OS workflow execution
 
 `workflow.run` is routed to Agent OS `POST /api/workflows/run`. Agent OS compiles the submitted workflow with its governed registry and executes the pinned plan through the existing WorkflowExecutor. Hub does not duplicate workflow scheduling.
+
+
+### Event outbox and signed webhooks
+
+Applications publish events through their authenticated integration identity:
+
+`POST /api/v1/integration/apps/{app_id}/events`
+
+Hub forces the event source to the authenticated application ID, persists the v1 event envelope, and creates outbox deliveries for matching subscriptions. Re-publishing the same `eventId` is idempotent and does not create duplicate deliveries.
+
+Subscription management:
+
+- `POST /api/v1/events/subscriptions`
+- `GET /api/v1/events/subscriptions`
+- `PATCH /api/v1/events/subscriptions/{id}`
+- `GET /api/v1/events/deliveries`
+- `POST /api/v1/events/deliveries/{id}/attempt`
+
+Subscription event types support exact matches, `prefix.*`, and `*`.
+
+Every webhook subscription requires a `secret_ref`. The actual secret is injected through `LYRA_WEBHOOK_SECRETS_JSON` and is never stored in the database. Hub signs the exact JSON request body with HMAC-SHA256 in `X-Lyra-Signature: sha256=<digest>`.
+
+Failed deliveries use bounded exponential backoff metadata and move to `dead` after the configured maximum attempts. Delivery attempts are explicit in v1 so deployment does not require a background worker. A later worker or broker adapter can consume the same persisted outbox without changing application contracts.
