@@ -10,6 +10,7 @@ from sqlalchemy import text
 from app.api.routes import applications, audit, capabilities, events, integration, page_configuration, plugins
 from app.domain.applications.registry import ManifestRegistry
 from app.domain.plugins.registry import PluginRegistry
+from app.infrastructure.admin_auth import AdminTokenAuth
 from app.infrastructure.database import Database
 from app.infrastructure.events import EventService, WebhookSecretRegistry
 from app.infrastructure.integration_auth import IntegrationTokenRegistry
@@ -24,6 +25,7 @@ def create_app(
     integration_tokens: dict[str, str] | None = None,
     webhook_secrets: dict[str, str] | None = None,
     event_transport: httpx.BaseTransport | None = None,
+    admin_token: str | None = None,
 ) -> FastAPI:
     resolved_root = repo_root or Path(__file__).resolve().parents[2]
     registry = ManifestRegistry(resolved_root)
@@ -46,6 +48,7 @@ def create_app(
         secrets=webhook_secret_registry,
         transport=event_transport,
     )
+    admin_auth = AdminTokenAuth(admin_token)
 
     api = FastAPI(
         title="Lyra Hub API",
@@ -75,6 +78,7 @@ def create_app(
     api.dependency_overrides[integration.get_token_registry] = lambda: integration_token_registry
     api.dependency_overrides[integration.get_event_service] = lambda: event_service
     api.dependency_overrides[events.get_event_service] = lambda: event_service
+    api.dependency_overrides[events.get_admin_auth] = lambda: admin_auth
 
     @api.get("/health", tags=["system"])
     def health() -> dict[str, str]:
