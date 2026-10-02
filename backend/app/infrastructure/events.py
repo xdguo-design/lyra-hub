@@ -99,6 +99,21 @@ class EventService:
                 ).all()
             )
 
+    def set_subscription_enabled(
+        self,
+        subscription_id: int,
+        enabled: bool,
+    ) -> EventSubscriptionRecord:
+        with self.database.session() as session:
+            record = session.get(EventSubscriptionRecord, subscription_id)
+            if record is None:
+                raise KeyError("subscription_not_found")
+            record.enabled = enabled
+            record.updated_at = datetime.now(UTC)
+            session.commit()
+            session.refresh(record)
+            return record
+
     def publish(
         self,
         *,
