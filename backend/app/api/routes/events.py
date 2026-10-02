@@ -12,7 +12,7 @@ from app.infrastructure.events import EventService, event_envelope
 
 router = APIRouter(prefix="/events", tags=["events"])
 
-EVENT_TYPE_PATTERN = r"^[a-z][a-z0-9-]*(\.[a-z][a-z0-9-]*)+$"
+EVENT_TYPE_PATTERN = r"^[a-z][a-z0-9-]*(\\.[a-z][a-z0-9-]*)*$"
 
 
 class EventSubscriptionCreate(BaseModel):
