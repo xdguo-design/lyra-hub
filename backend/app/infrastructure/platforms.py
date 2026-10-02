@@ -219,11 +219,17 @@ class ApplicationProviderAdapter:
         registry: Any,
         *,
         tokens: dict[str, str] | None = None,
+        base_urls: dict[str, str] | None = None,
         transport: httpx.BaseTransport | None = None,
         timeout_seconds: float = 5.0,
     ) -> None:
         self.registry = registry
         self.tokens = tokens or {}
+        self.base_urls = {
+            str(app_id): str(url).rstrip("/")
+            for app_id, url in (base_urls or {}).items()
+            if str(app_id).strip() and str(url).strip()
+        }
         self.transport = transport
         self.timeout_seconds = timeout_seconds
 
@@ -244,6 +250,23 @@ class ApplicationProviderAdapter:
             if str(app_id).strip() and str(token)
         }
 
+    @classmethod
+    def base_urls_from_env(cls) -> dict[str, str]:
+        raw = os.getenv("LYRA_PROVIDER_BASE_URLS_JSON", "").strip()
+        if not raw:
+            return {}
+        try:
+            payload = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            raise RuntimeError("LYRA_PROVIDER_BASE_URLS_JSON must be valid JSON") from exc
+        if not isinstance(payload, dict):
+            raise RuntimeError("LYRA_PROVIDER_BASE_URLS_JSON must be a JSON object")
+        return {
+            str(app_id): str(url).rstrip("/")
+            for app_id, url in payload.items()
+            if str(app_id).strip() and str(url).strip()
+        }
+
     def definitions(self) -> list[dict[str, Any]]:
         items: list[dict[str, Any]] = []
         for summary in self.registry.list():
@@ -251,7 +274,10 @@ class ApplicationProviderAdapter:
             if detail is None or not detail.capabilities_provided:
                 continue
             service = detail.manifest.get("service") or {}
-            base_url = str(service.get("baseUrl") or "").rstrip("/")
+            base_url = self.base_urls.get(
+                detail.id,
+                str(service.get("baseUrl") or "").rstrip("/"),
+            )
             capability_path = str(
                 service.get("capabilityPath") or "/api/lyra/capabilities/{capability}"
             )
@@ -278,10 +304,18 @@ class ApplicationProviderAdapter:
             if detail is None or not detail.capabilities_provided:
                 continue
             service = detail.manifest.get("service") or {}
-            base_url = str(service.get("baseUrl") or "").rstrip("/")
+            base_url = self.base_urls.get(
+                detail.id,
+                str(service.get("baseUrl") or "").rstrip("/"),
+            )
             if not base_url:
                 continue
-            health_url = str(detail.health_url or "").strip()
+            manifest_health_url = str(detail.health_url or "").strip()
+            health_url = (
+                f"{base_url}/health"
+                if detail.id in self.base_urls
+                else manifest_health_url or f"{base_url}/health"
+            )
             try:
                 with httpx.Client(
                     timeout=self.timeout_seconds,
@@ -446,6 +480,7 @@ class PlatformServices:
         *,
         application_registry: Any | None = None,
         provider_tokens: dict[str, str] | None = None,
+        provider_base_urls: dict[str, str] | None = None,
     ) -> None:
         self.settings = settings or PlatformSettings.from_env()
         self.gateway = GatewayAdapter(self.settings, transport)
@@ -459,6 +494,11 @@ class PlatformServices:
                     provider_tokens
                     if provider_tokens is not None
                     else ApplicationProviderAdapter.tokens_from_env()
+                ),
+                base_urls=(
+                    provider_base_urls
+                    if provider_base_urls is not None
+                    else ApplicationProviderAdapter.base_urls_from_env()
                 ),
                 transport=transport,
                 timeout_seconds=self.settings.timeout_seconds,
