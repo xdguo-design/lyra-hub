@@ -14,6 +14,8 @@ class PlatformSettings:
     agent_os_url: str = "http://127.0.0.1:8770"
     agent_os_token: str = ""
     agent_runtime_token: str = ""
+    print_url: str = "http://127.0.0.1:8080"
+    print_api_key: str = ""
     timeout_seconds: float = 5.0
 
     @classmethod
@@ -24,6 +26,8 @@ class PlatformSettings:
             agent_os_url=os.getenv("LYRA_AGENT_OS_URL", cls.agent_os_url).rstrip("/"),
             agent_os_token=os.getenv("LYRA_AGENT_OS_TOKEN", ""),
             agent_runtime_token=os.getenv("LYRA_AGENT_RUNTIME_TOKEN", ""),
+            print_url=os.getenv("LYRA_PRINT_URL", cls.print_url).rstrip("/"),
+            print_api_key=os.getenv("LYRA_PRINT_API_KEY", ""),
             timeout_seconds=float(os.getenv("LYRA_PLATFORM_TIMEOUT_SECONDS", "5")),
         )
 
@@ -123,6 +127,9 @@ class AgentOSAdapter:
     def compile_workflow(self, payload: dict[str, Any]) -> dict[str, Any]:
         return self._request("POST", "/api/workflows/compile-preview", headers=self._headers(), json=payload)
 
+    def run_workflow(self, payload: dict[str, Any]) -> dict[str, Any]:
+        return self._request("POST", "/api/workflows/run", headers=self._headers(), json=payload)
+
     def _request(self, method: str, path: str, **kwargs: Any) -> dict[str, Any]:
         with httpx.Client(
             base_url=self.settings.agent_os_url,
@@ -137,6 +144,66 @@ class AgentOSAdapter:
         return body
 
 
+class PrintAdapter:
+    def __init__(self, settings: PlatformSettings, transport: httpx.BaseTransport | None = None) -> None:
+        self.settings = settings
+        self.transport = transport
+
+    def _headers(self) -> dict[str, str]:
+        return {"X-Print-Api-Key": self.settings.print_api_key} if self.settings.print_api_key else {}
+
+    def status(self) -> ServiceStatus:
+        try:
+            with httpx.Client(
+                base_url=self.settings.print_url,
+                timeout=self.settings.timeout_seconds,
+                transport=self.transport,
+            ) as client:
+                response = client.get("/health")
+                response.raise_for_status()
+                body = response.json()
+            reachable = str(body.get("status", "")).upper() in {"UP", "OK"}
+            return ServiceStatus("lyra-print", "Lyra Print", self.settings.print_url, reachable, body)
+        except (httpx.HTTPError, ValueError) as exc:
+            return ServiceStatus("lyra-print", "Lyra Print", self.settings.print_url, False, str(exc))
+
+    def execute(self, payload: dict[str, Any]) -> dict[str, Any]:
+        request_payload = dict(payload)
+        kind = str(request_payload.pop("kind", "template")).strip().lower()
+        should_queue = bool(request_payload.pop("queue", True))
+        paths = {
+            "template": "/api/print-tasks",
+            "pdf": "/api/print-tasks/pdf",
+            "raw": "/api/print-tasks/raw",
+        }
+        path = paths.get(kind)
+        if path is None:
+            raise ValueError("print.execute kind must be one of: template, pdf, raw")
+
+        created = self._request("POST", path, json=request_payload)
+        if not should_queue:
+            return {"task": created, "queued": False}
+
+        task_id = str(created.get("id", "")).strip()
+        if not task_id:
+            raise ValueError("Lyra Print did not return a task id")
+        queued = self._request("POST", f"/api/print-tasks/{task_id}/queue")
+        return {"task": created, "queued": True, "queue_result": queued}
+
+    def _request(self, method: str, path: str, **kwargs: Any) -> dict[str, Any]:
+        with httpx.Client(
+            base_url=self.settings.print_url,
+            timeout=self.settings.timeout_seconds,
+            transport=self.transport,
+        ) as client:
+            response = client.request(method, path, headers=self._headers(), **kwargs)
+            response.raise_for_status()
+            body = response.json()
+        if not isinstance(body, dict):
+            raise ValueError("Lyra Print returned a non-object JSON response")
+        return body
+
+
 class PlatformServices:
     def __init__(
         self,
@@ -146,17 +213,62 @@ class PlatformServices:
         self.settings = settings or PlatformSettings.from_env()
         self.gateway = GatewayAdapter(self.settings, transport)
         self.agent_os = AgentOSAdapter(self.settings, transport)
+        self.print = PrintAdapter(self.settings, transport)
 
     def status(self) -> list[ServiceStatus]:
-        return [self.gateway.status(), self.agent_os.status()]
+        return [self.gateway.status(), self.agent_os.status(), self.print.status()]
 
     def capabilities(self) -> list[dict[str, Any]]:
         return [
-            {"name": "model.list", "source": "gateway", "mutation": False, "description": "List Gateway models"},
-            {"name": "model.generate", "source": "gateway", "mutation": True, "description": "Generate through Gateway routing"},
-            {"name": "agent.list", "source": "agent-os", "mutation": False, "description": "List Agent OS agents"},
-            {"name": "agent.run", "source": "agent-os", "mutation": True, "description": "Execute an Agent OS runtime turn"},
-            {"name": "workflow.compile", "source": "agent-os", "mutation": False, "description": "Compile-preview an Agent OS workflow"},
+            {
+                "name": "model.list",
+                "source": "gateway",
+                "service_id": "gateway",
+                "mutation": False,
+                "description": "List Gateway models",
+            },
+            {
+                "name": "model.generate",
+                "source": "gateway",
+                "service_id": "gateway",
+                "mutation": True,
+                "description": "Generate through Gateway routing",
+            },
+            {
+                "name": "agent.list",
+                "source": "agent-os",
+                "service_id": "agent-os",
+                "mutation": False,
+                "description": "List Agent OS agents",
+            },
+            {
+                "name": "agent.run",
+                "source": "agent-os",
+                "service_id": "agent-os",
+                "mutation": True,
+                "description": "Execute an Agent OS runtime turn",
+            },
+            {
+                "name": "workflow.compile",
+                "source": "agent-os",
+                "service_id": "agent-os",
+                "mutation": False,
+                "description": "Compile-preview an Agent OS workflow",
+            },
+            {
+                "name": "workflow.run",
+                "source": "agent-os",
+                "service_id": "agent-os",
+                "mutation": True,
+                "description": "Compile and execute an Agent OS workflow",
+            },
+            {
+                "name": "print.execute",
+                "source": "lyra-print",
+                "service_id": "lyra-print",
+                "mutation": True,
+                "description": "Create and queue a Lyra Print task",
+            },
         ]
 
     def invoke(self, capability: str, payload: dict[str, Any]) -> dict[str, Any]:
@@ -170,4 +282,8 @@ class PlatformServices:
             return self.agent_os.run(payload)
         if capability == "workflow.compile":
             return self.agent_os.compile_workflow(payload)
+        if capability == "workflow.run":
+            return self.agent_os.run_workflow(payload)
+        if capability == "print.execute":
+            return self.print.execute(payload)
         raise KeyError(capability)
