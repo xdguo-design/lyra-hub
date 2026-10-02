@@ -164,6 +164,16 @@ class EventService:
             session.refresh(event)
             return EventPublishResult(event, False, len(matching))
 
+    def list_events(self, *, limit: int = 100) -> list[EventRecord]:
+        with self.database.session() as session:
+            return list(
+                session.scalars(
+                    select(EventRecord)
+                    .order_by(EventRecord.created_at.desc())
+                    .limit(limit)
+                ).all()
+            )
+
     def list_deliveries(
         self,
         *,
