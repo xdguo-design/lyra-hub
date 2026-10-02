@@ -3,24 +3,56 @@
   "$id": "https://lyra.local/contracts/capability-v1.schema.json",
   "title": "Lyra Capability Definition v1",
   "type": "object",
-  "required": ["schemaVersion", "name", "source", "mutation", "permissions"],
+  "required": [
+    "schemaVersion",
+    "name",
+    "source",
+    "mutation",
+    "permissions"
+  ],
   "properties": {
-    "schemaVersion": { "const": "1.0" },
+    "schemaVersion": {
+      "const": "1.0"
+    },
     "name": {
       "type": "string",
       "pattern": "^[a-z][a-z0-9-]*(\\.[a-z][a-z0-9-]*)+$"
     },
-    "source": { "enum": ["gateway", "agent-os", "hub", "application"] },
-    "mutation": { "type": "boolean" },
-    "description": { "type": "string" },
+    "source": {
+      "enum": [
+        "gateway",
+        "agent-os",
+        "hub",
+        "application"
+      ]
+    },
+    "mutation": {
+      "type": "boolean"
+    },
+    "description": {
+      "type": "string"
+    },
     "permissions": {
       "type": "array",
-      "items": { "type": "string" },
+      "items": {
+        "type": "string"
+      },
       "uniqueItems": true
     },
-    "inputSchemaRef": { "type": "string" },
-    "outputSchemaRef": { "type": "string" },
-    "deprecated": { "type": "boolean", "default": false }
+    "inputSchemaRef": {
+      "type": "string"
+    },
+    "outputSchemaRef": {
+      "type": "string"
+    },
+    "deprecated": {
+      "type": "boolean",
+      "default": false
+    },
+    "serviceId": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]{1,63}$"
+    }
   },
   "additionalProperties": false
 }
