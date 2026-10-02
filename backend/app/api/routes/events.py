@@ -19,7 +19,7 @@ class EventSubscriptionCreate(BaseModel):
     subscriber_id: str = Field(min_length=1, max_length=120)
     event_type: str = Field(min_length=1, max_length=160)
     endpoint_url: AnyHttpUrl
-    secret_ref: str | None = Field(default=None, max_length=120)
+    secret_ref: str = Field(min_length=1, max_length=120)
     enabled: bool = True
     max_attempts: int = Field(default=5, ge=1, le=20)
 
@@ -105,7 +105,7 @@ def create_subscription(
         subscriber_id=request.subscriber_id.strip(),
         event_type=event_type,
         endpoint_url=str(request.endpoint_url),
-        secret_ref=request.secret_ref.strip() if request.secret_ref else None,
+        secret_ref=request.secret_ref.strip(),
         enabled=request.enabled,
         max_attempts=request.max_attempts,
     )
