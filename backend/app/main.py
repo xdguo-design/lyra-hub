@@ -22,6 +22,8 @@ def create_app(
     platform_settings: PlatformSettings | None = None,
     platform_transport: httpx.BaseTransport | None = None,
     integration_tokens: dict[str, str] | None = None,
+    provider_tokens: dict[str, str] | None = None,
+    provider_base_urls: dict[str, str] | None = None,
     webhook_secrets: dict[str, str] | None = None,
     event_transport: httpx.BaseTransport | None = None,
 ) -> FastAPI:
@@ -30,7 +32,13 @@ def create_app(
     plugin_registry = PluginRegistry(resolved_root)
     database = Database(database_url)
     database.initialize()
-    platform_services = PlatformServices(platform_settings, platform_transport)
+    platform_services = PlatformServices(
+        platform_settings,
+        platform_transport,
+        application_registry=registry,
+        provider_tokens=provider_tokens,
+        provider_base_urls=provider_base_urls,
+    )
     integration_token_registry = (
         IntegrationTokenRegistry(integration_tokens)
         if integration_tokens is not None

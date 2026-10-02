@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 from dataclasses import dataclass
 from pathlib import Path
@@ -212,6 +213,175 @@ class PrintAdapter:
         return body
 
 
+class ApplicationProviderAdapter:
+    def __init__(
+        self,
+        registry: Any,
+        *,
+        tokens: dict[str, str] | None = None,
+        base_urls: dict[str, str] | None = None,
+        transport: httpx.BaseTransport | None = None,
+        timeout_seconds: float = 5.0,
+    ) -> None:
+        self.registry = registry
+        self.tokens = tokens or {}
+        self.base_urls = {
+            str(app_id): str(url).rstrip("/")
+            for app_id, url in (base_urls or {}).items()
+            if str(app_id).strip() and str(url).strip()
+        }
+        self.transport = transport
+        self.timeout_seconds = timeout_seconds
+
+    @classmethod
+    def tokens_from_env(cls) -> dict[str, str]:
+        raw = os.getenv("LYRA_PROVIDER_TOKENS_JSON", "").strip()
+        if not raw:
+            return {}
+        try:
+            payload = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            raise RuntimeError("LYRA_PROVIDER_TOKENS_JSON must be valid JSON") from exc
+        if not isinstance(payload, dict):
+            raise RuntimeError("LYRA_PROVIDER_TOKENS_JSON must be a JSON object")
+        return {
+            str(app_id): str(token)
+            for app_id, token in payload.items()
+            if str(app_id).strip() and str(token)
+        }
+
+    @classmethod
+    def base_urls_from_env(cls) -> dict[str, str]:
+        raw = os.getenv("LYRA_PROVIDER_BASE_URLS_JSON", "").strip()
+        if not raw:
+            return {}
+        try:
+            payload = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            raise RuntimeError("LYRA_PROVIDER_BASE_URLS_JSON must be valid JSON") from exc
+        if not isinstance(payload, dict):
+            raise RuntimeError("LYRA_PROVIDER_BASE_URLS_JSON must be a JSON object")
+        return {
+            str(app_id): str(url).rstrip("/")
+            for app_id, url in payload.items()
+            if str(app_id).strip() and str(url).strip()
+        }
+
+    def definitions(self) -> list[dict[str, Any]]:
+        items: list[dict[str, Any]] = []
+        owners: dict[str, str] = {}
+        for summary in self.registry.list():
+            detail = self.registry.get(summary.id)
+            if detail is None or not detail.capabilities_provided:
+                continue
+            service = detail.manifest.get("service") or {}
+            base_url = self.base_urls.get(
+                detail.id,
+                str(service.get("baseUrl") or "").rstrip("/"),
+            )
+            capability_path = str(
+                service.get("capabilityPath") or "/api/lyra/capabilities/{capability}"
+            )
+            if not base_url:
+                continue
+            for capability in detail.capabilities_provided:
+                previous_owner = owners.get(capability)
+                if previous_owner is not None and previous_owner != detail.id:
+                    raise RuntimeError(
+                        f"capability provider collision: {capability} is provided by "
+                        f"{previous_owner} and {detail.id}"
+                    )
+                owners[capability] = detail.id
+                items.append(
+                    {
+                        "name": capability,
+                        "source": detail.id,
+                        "service_id": f"app:{detail.id}",
+                        "mutation": True,
+                        "description": f"Provided by application {detail.name}",
+                        "base_url": base_url,
+                        "capability_path": capability_path,
+                    }
+                )
+        return items
+
+    def status(self) -> list[ServiceStatus]:
+        statuses: list[ServiceStatus] = []
+        for summary in self.registry.list():
+            detail = self.registry.get(summary.id)
+            if detail is None or not detail.capabilities_provided:
+                continue
+            service = detail.manifest.get("service") or {}
+            base_url = self.base_urls.get(
+                detail.id,
+                str(service.get("baseUrl") or "").rstrip("/"),
+            )
+            if not base_url:
+                continue
+            manifest_health_url = str(detail.health_url or "").strip()
+            health_url = (
+                f"{base_url}/health"
+                if detail.id in self.base_urls
+                else manifest_health_url or f"{base_url}/health"
+            )
+            try:
+                with httpx.Client(
+                    timeout=self.timeout_seconds,
+                    transport=self.transport,
+                ) as client:
+                    response = client.get(health_url or f"{base_url}/health")
+                    response.raise_for_status()
+                    body = response.json()
+                reachable = isinstance(body, dict)
+                statuses.append(
+                    ServiceStatus(
+                        f"app:{detail.id}",
+                        detail.name,
+                        base_url,
+                        reachable,
+                        body if isinstance(body, dict) else {"status": "ok"},
+                    )
+                )
+            except (httpx.HTTPError, ValueError) as exc:
+                statuses.append(
+                    ServiceStatus(
+                        f"app:{detail.id}",
+                        detail.name,
+                        base_url,
+                        False,
+                        str(exc),
+                    )
+                )
+        return statuses
+
+    def invoke(self, definition: dict[str, Any], payload: dict[str, Any]) -> dict[str, Any]:
+        app_id = str(definition["source"])
+        token = self.tokens.get(app_id, "")
+        if not token:
+            raise ValueError(
+                f"provider token is not configured for application {app_id}"
+            )
+        headers = {"Authorization": f"Bearer {token}"}
+        path = str(definition["capability_path"]).replace(
+            "{capability}",
+            str(definition["name"]),
+        )
+        with httpx.Client(
+            base_url=str(definition["base_url"]),
+            timeout=self.timeout_seconds,
+            transport=self.transport,
+        ) as client:
+            response = client.post(path, headers=headers, json={"payload": payload})
+            response.raise_for_status()
+            body = response.json()
+        if not isinstance(body, dict):
+            raise ValueError("Application provider returned a non-object JSON response")
+        result = body.get("result", body)
+        if not isinstance(result, dict):
+            raise ValueError("Application provider result must be an object")
+        return result
+
+
 class SharedFilesAdapter:
     def __init__(self, settings: PlatformSettings) -> None:
         self.settings = settings
@@ -319,23 +489,49 @@ class PlatformServices:
         self,
         settings: PlatformSettings | None = None,
         transport: httpx.BaseTransport | None = None,
+        *,
+        application_registry: Any | None = None,
+        provider_tokens: dict[str, str] | None = None,
+        provider_base_urls: dict[str, str] | None = None,
     ) -> None:
         self.settings = settings or PlatformSettings.from_env()
         self.gateway = GatewayAdapter(self.settings, transport)
         self.agent_os = AgentOSAdapter(self.settings, transport)
         self.print = PrintAdapter(self.settings, transport)
         self.shared_files = SharedFilesAdapter(self.settings)
+        self.application_providers = (
+            ApplicationProviderAdapter(
+                application_registry,
+                tokens=(
+                    provider_tokens
+                    if provider_tokens is not None
+                    else ApplicationProviderAdapter.tokens_from_env()
+                ),
+                base_urls=(
+                    provider_base_urls
+                    if provider_base_urls is not None
+                    else ApplicationProviderAdapter.base_urls_from_env()
+                ),
+                transport=transport,
+                timeout_seconds=self.settings.timeout_seconds,
+            )
+            if application_registry is not None
+            else None
+        )
 
     def status(self) -> list[ServiceStatus]:
-        return [
+        statuses = [
             self.gateway.status(),
             self.agent_os.status(),
             self.print.status(),
             self.shared_files.status(),
         ]
+        if self.application_providers is not None:
+            statuses.extend(self.application_providers.status())
+        return statuses
 
     def capabilities(self) -> list[dict[str, Any]]:
-        return [
+        platform_items = [
             {
                 "name": "model.list",
                 "source": "gateway",
@@ -393,8 +589,21 @@ class PlatformServices:
                 "description": "Read an explicitly shared UTF-8 text artifact",
             },
         ]
+        by_name = {item["name"]: item for item in platform_items}
+        if self.application_providers is not None:
+            for item in self.application_providers.definitions():
+                by_name[item["name"]] = item
+        return list(by_name.values())
 
     def invoke(self, capability: str, payload: dict[str, Any]) -> dict[str, Any]:
+        if self.application_providers is not None:
+            provider_definitions = {
+                item["name"]: item
+                for item in self.application_providers.definitions()
+            }
+            definition = provider_definitions.get(capability)
+            if definition is not None:
+                return self.application_providers.invoke(definition, payload)
         if capability == "model.list":
             return self.gateway.list_models()
         if capability == "model.generate":
