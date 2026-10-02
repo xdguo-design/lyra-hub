@@ -92,6 +92,17 @@ def test_application_event_publish_and_signed_webhook_delivery(tmp_path) -> None
     assert duplicate.json()["delivery_count"] == 1
     assert len(client.get("/api/v1/events/deliveries").json()) == 1
 
+    conflict = client.post(
+        "/api/v1/integration/apps/lyra-narrative/events",
+        json={
+            "eventId": "evt-001",
+            "eventType": "workflow.failed",
+            "data": {"workflow_id": "novel", "status": "failed"},
+        },
+        headers={"Authorization": "Bearer narrative-token"},
+    )
+    assert conflict.status_code == 409
+
     subscription_id = subscription.json()["id"]
     disabled = client.patch(
         f"/api/v1/events/subscriptions/{subscription_id}",
