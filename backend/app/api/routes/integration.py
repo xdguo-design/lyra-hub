@@ -238,20 +238,28 @@ def publish_application_event(
                 detail="Application is disabled and cannot publish Hub events",
             )
 
-    result = events.publish(
-        event_id=request.event_id,
-        event_type=request.event_type,
-        event_version=request.event_version,
-        occurred_at=request.occurred_at,
-        source_type="application",
-        source_id=app_id,
-        tenant_id=request.tenant_id,
-        actor_id=request.actor_id,
-        subject=request.subject,
-        correlation_id=request.correlation_id,
-        causation_id=request.causation_id,
-        data=request.data,
-    )
+    try:
+        result = events.publish(
+            event_id=request.event_id,
+            event_type=request.event_type,
+            event_version=request.event_version,
+            occurred_at=request.occurred_at,
+            source_type="application",
+            source_id=app_id,
+            tenant_id=request.tenant_id,
+            actor_id=request.actor_id,
+            subject=request.subject,
+            correlation_id=request.correlation_id,
+            causation_id=request.causation_id,
+            data=request.data,
+        )
+    except ValueError as exc:
+        if str(exc) == "event_id_conflict":
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Event id was already used for a different event",
+            ) from exc
+        raise
 
     with database.session() as session:
         record_audit(
