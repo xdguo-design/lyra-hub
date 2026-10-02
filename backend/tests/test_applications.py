@@ -192,6 +192,7 @@ def test_gateway_and_agent_os_capabilities_are_invoked_through_hub(tmp_path) -> 
         platform_settings=settings,
         platform_transport=httpx.MockTransport(handler),
         provider_tokens={"lyra-print": "print-provider-token"},
+        provider_base_urls={"lyra-print": "https://print.local"},
     )
     test_client = TestClient(app)
 
