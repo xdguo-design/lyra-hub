@@ -217,6 +217,24 @@
         }
       },
       "additionalProperties": false
+    },
+    "service": {
+      "type": "object",
+      "required": [
+        "baseUrl"
+      ],
+      "properties": {
+        "baseUrl": {
+          "type": "string",
+          "format": "uri"
+        },
+        "capabilityPath": {
+          "type": "string",
+          "pattern": "^/",
+          "default": "/api/lyra/capabilities/{capability}"
+        }
+      },
+      "additionalProperties": false
     }
   },
   "additionalProperties": false
