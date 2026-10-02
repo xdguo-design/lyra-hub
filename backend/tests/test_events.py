@@ -10,6 +10,9 @@ from fastapi.testclient import TestClient
 from app.main import create_app
 
 
+ADMIN_HEADERS = {"Authorization": "Bearer admin-token"}
+
+
 def test_application_event_publish_and_signed_webhook_delivery(tmp_path) -> None:
     received: dict[str, object] = {}
 
@@ -26,11 +29,13 @@ def test_application_event_publish_and_signed_webhook_delivery(tmp_path) -> None
             integration_tokens={"lyra-narrative": "narrative-token"},
             webhook_secrets={"receiver-secret": "signing-key"},
             event_transport=httpx.MockTransport(handler),
+            admin_token="admin-token",
         )
     )
 
     subscription = client.post(
         "/api/v1/events/subscriptions",
+        headers=ADMIN_HEADERS,
         json={
             "subscriber_id": "test-receiver",
             "event_type": "workflow.*",
@@ -63,12 +68,16 @@ def test_application_event_publish_and_signed_webhook_delivery(tmp_path) -> None
         "id": "lyra-narrative",
     }
 
-    deliveries = client.get("/api/v1/events/deliveries").json()
+    deliveries = client.get(
+        "/api/v1/events/deliveries",
+        headers=ADMIN_HEADERS,
+    ).json()
     assert len(deliveries) == 1
     assert deliveries[0]["status"] == "pending"
 
     attempted = client.post(
-        f"/api/v1/events/deliveries/{deliveries[0]['id']}/attempt"
+        f"/api/v1/events/deliveries/{deliveries[0]['id']}/attempt",
+        headers=ADMIN_HEADERS,
     )
     assert attempted.status_code == 200
     assert attempted.json()["status"] == "delivered"
@@ -90,7 +99,9 @@ def test_application_event_publish_and_signed_webhook_delivery(tmp_path) -> None
     assert duplicate.status_code == 200
     assert duplicate.json()["duplicate"] is True
     assert duplicate.json()["delivery_count"] == 1
-    assert len(client.get("/api/v1/events/deliveries").json()) == 1
+    assert len(
+        client.get("/api/v1/events/deliveries", headers=ADMIN_HEADERS).json()
+    ) == 1
 
     conflict = client.post(
         "/api/v1/integration/apps/lyra-narrative/events",
@@ -107,6 +118,7 @@ def test_application_event_publish_and_signed_webhook_delivery(tmp_path) -> None
     disabled = client.patch(
         f"/api/v1/events/subscriptions/{subscription_id}",
         json={"enabled": False},
+        headers=ADMIN_HEADERS,
     )
     assert disabled.status_code == 200
     assert disabled.json()["enabled"] is False
@@ -138,10 +150,12 @@ def test_failed_webhook_moves_from_retry_to_dead_letter(tmp_path) -> None:
             integration_tokens={"lyra-narrative": "narrative-token"},
             webhook_secrets={"retry-secret": "retry-signing-key"},
             event_transport=httpx.MockTransport(handler),
+            admin_token="admin-token",
         )
     )
     created = client.post(
         "/api/v1/events/subscriptions",
+        headers=ADMIN_HEADERS,
         json={
             "subscriber_id": "failing-receiver",
             "event_type": "chapter.completed",
@@ -163,15 +177,24 @@ def test_failed_webhook_moves_from_retry_to_dead_letter(tmp_path) -> None:
     )
     assert published.status_code == 200
 
-    delivery_id = client.get("/api/v1/events/deliveries").json()[0]["id"]
+    delivery_id = client.get(
+        "/api/v1/events/deliveries",
+        headers=ADMIN_HEADERS,
+    ).json()[0]["id"]
 
-    first = client.post(f"/api/v1/events/deliveries/{delivery_id}/attempt")
+    first = client.post(
+        f"/api/v1/events/deliveries/{delivery_id}/attempt",
+        headers=ADMIN_HEADERS,
+    )
     assert first.status_code == 200
     assert first.json()["status"] == "retry"
     assert first.json()["attempt_count"] == 1
     assert first.json()["next_attempt_at"] is not None
 
-    second = client.post(f"/api/v1/events/deliveries/{delivery_id}/attempt")
+    second = client.post(
+        f"/api/v1/events/deliveries/{delivery_id}/attempt",
+        headers=ADMIN_HEADERS,
+    )
     assert second.status_code == 200
     assert second.json()["status"] == "dead"
     assert second.json()["attempt_count"] == 2
@@ -184,6 +207,7 @@ def test_event_publish_requires_application_identity(tmp_path) -> None:
         create_app(
             database_url=f"sqlite:///{tmp_path / 'events-auth.db'}",
             integration_tokens={"lyra-narrative": "narrative-token"},
+            admin_token="admin-token",
         )
     )
 
@@ -207,3 +231,36 @@ def test_event_publish_requires_application_identity(tmp_path) -> None:
         headers={"Authorization": "Bearer narrative-token"},
     )
     assert invalid_type.status_code == 422
+
+
+
+def test_event_management_requires_admin_identity(tmp_path) -> None:
+    client = TestClient(
+        create_app(
+            database_url=f"sqlite:///{tmp_path / 'events-admin.db'}",
+            admin_token="admin-token",
+        )
+    )
+
+    denied = client.get("/api/v1/events/subscriptions")
+    assert denied.status_code == 401
+    assert denied.headers["www-authenticate"] == "Bearer"
+
+    allowed = client.get(
+        "/api/v1/events/subscriptions",
+        headers=ADMIN_HEADERS,
+    )
+    assert allowed.status_code == 200
+    assert allowed.json() == []
+
+
+def test_event_management_is_disabled_without_admin_token(tmp_path) -> None:
+    client = TestClient(
+        create_app(
+            database_url=f"sqlite:///{tmp_path / 'events-no-admin.db'}",
+            admin_token="",
+        )
+    )
+
+    response = client.get("/api/v1/events/subscriptions")
+    assert response.status_code == 503
