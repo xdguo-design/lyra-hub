@@ -144,6 +144,33 @@ h1 { margin: 5px 0 0; font-size: 30px; }
 .settingRow small { margin-top: 5px; color: #7d8da4; }
 .envHelp { margin-top: 18px; display: grid; gap: 8px; padding: 16px; border-radius: 14px; background: #f6f8fb; }
 .envHelp code { font-size: 12px; color: #52647f; overflow-wrap: anywhere; }
+.platformConfig, .generationCheck { display: grid; gap: 13px; margin-bottom: 20px; }
+.platformConfig label, .generationCheck label { display: grid; gap: 6px; color: #66758d; font-size: 11px; font-weight: 700; }
+.platformConfig input, .generationCheck textarea { width: 100%; border: 1px solid #dce3ed; border-radius: 10px; background: white; color: #213550; padding: 9px 10px; outline: none; }
+.platformConfig input:focus, .generationCheck textarea:focus { border-color: #7c9cff; box-shadow: 0 0 0 3px rgba(78,118,255,.1); }
+.inlineActions { display: flex; flex-wrap: wrap; align-items: center; gap: 9px; }
+.inlineActions > span, .platformConfig > small { color: #7d8da4; font-size: 11px; }
+.inlineStatus { margin-top: 10px; padding: 11px 13px; border-radius: 10px; background: #f2f5fa; color: #52647f; font-size: 12px; }
+.inlineStatus.good { background: #edf8f2; color: #23724b; }
+.inlineStatus.bad { background: #fff1f0; color: #b33c37; }
+.platformCatalogHead { margin-top: 24px; }
+.platformCatalog { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 11px; }
+.platformCatalogItem { display: grid; gap: 6px; border: 1px solid #e5eaf1; border-radius: 13px; background: #fff; padding: 14px; }
+.platformCatalogItem strong { overflow-wrap: anywhere; }
+.platformCatalogItem small { color: #8493aa; }
+.platformCatalogItem .pill { width: fit-content; }
+.workRoleLogin { max-width: 560px; }
+.workRoleSteps { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 16px; margin-top: 18px; }
+.workRoleSteps .configCard { align-content: start; }
+.workRoleSteps label textarea { width: 100%; resize: vertical; border: 1px solid #dce3ed; border-radius: 10px; background: white; color: #213550; padding: 10px; font: inherit; font-size: 13px; line-height: 1.55; }
+.workRoleSteps label textarea:focus { border-color: #7c9cff; outline: 0; box-shadow: 0 0 0 3px rgba(78,118,255,.1); }
+.helperText { color: #7d8da4; font-size: 11px; line-height: 1.5; }
+.workRoleResult { display: grid; gap: 10px; padding: 16px; border-radius: 14px; border: 1px solid #dce9e2; background: #f6fbf8; }
+.workRoleResult > div { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; }
+.workRoleResult small { color: #718078; font-size: 11px; }
+.workRoleResult p { margin: 0; color: #2f4439; white-space: pre-wrap; line-height: 1.75; }
+@media (max-width: 800px) { .platformCatalog { grid-template-columns: 1fr; } }
+@media (max-width: 900px) { .workRoleSteps { grid-template-columns: 1fr; } }
 
 .embeddedWorkspace { min-height: calc(100vh - 130px); display: grid; grid-template-rows: auto 1fr; gap: 14px; }
 .embeddedBar { display: flex; justify-content: space-between; align-items: center; gap: 18px; border: 1px solid #e3e9f2; border-radius: 16px; background: #fff; padding: 15px 18px; }
@@ -181,6 +208,49 @@ h1 { margin: 5px 0 0; font-size: 30px; }
 .pageItemCheckbox { min-height: 35px !important; }
 .compactEmpty { padding: 22px; }
 
+.pageHeading { align-items: flex-start; margin-bottom: 18px; }
+.pageHeading h2 { margin: 0; font-size: 23px; }
+.adminAccessPanel { display: grid; grid-template-columns: minmax(220px, 1fr) minmax(260px, 1fr); align-items: center; gap: 18px; }
+.adminAccessPanel h3 { margin: 0; font-size: 15px; }
+.adminAccessPanel p { margin: 5px 0 0; color: #7a8aa3; font-size: 12px; }
+.adminTokenInput { display: flex; align-items: end; gap: 9px; flex-wrap: wrap; }
+.adminTokenInput label, .tenantCreateForm label, .tenantInviteForm label { display: grid; flex: 1; min-width: 170px; gap: 6px; color: #66758d; font-size: 11px; font-weight: 700; }
+.adminTokenInput input, .tenantCreateForm input, .tenantInviteForm input { width: 100%; border: 1px solid #dce3ed; border-radius: 10px; background: white; color: #213550; padding: 9px 10px; outline: none; }
+.adminTokenInput > span { color: #258b5f; font-size: 12px; }
+.maintenancePage > .section, .tenantsPage > .section { margin-top: 18px; }
+.maintenanceServiceGrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.maintenanceService, .maintenanceRepairCard { display: grid; gap: 12px; border: 1px solid #e5eaf1; border-radius: 14px; background: #fbfcfe; padding: 15px; }
+.maintenanceServiceHead { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.maintenanceServiceHead strong { font-size: 14px; }
+.maintenanceService > small, .maintenanceRepairCard > small { color: #8493aa; font-size: 11px; }
+.maintenanceCheck { display: flex; justify-content: space-between; gap: 8px; border-top: 1px solid #edf0f4; padding-top: 8px; color: #65758e; font-size: 11px; }
+.maintenanceCheck span:last-child { text-align: right; }
+.maintenanceAlertList { display: grid; }
+.maintenanceAlert { display: flex; justify-content: space-between; align-items: center; gap: 14px; padding: 14px 0; border-top: 1px solid #edf0f4; }
+.maintenanceAlert:first-child { border-top: 0; }
+.maintenanceAlert strong, .maintenanceAlert small, .maintenanceRepairCard strong, .maintenanceRepairCard small { display: block; }
+.maintenanceAlert small, .maintenanceRepairCard small { margin-top: 5px; color: #8493aa; font-size: 11px; }
+.maintenanceRepairGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 13px; }
+.maintenanceRepairCard { grid-template-columns: 1fr auto; align-items: center; }
+.maintenanceRepairCard button, .maintenanceRepairCard > small { grid-column: 1 / -1; }
+.confirmBackdrop { position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; padding: 20px; background: rgba(10, 24, 44, .48); }
+.confirmDialog { width: min(520px, 100%); border: 1px solid #e2e8f1; border-radius: 18px; background: white; padding: 24px; box-shadow: 0 22px 70px rgba(11, 29, 58, .24); }
+.confirmDialog h3 { margin: 0; font-size: 19px; }
+.confirmDialog p { color: #697b94; font-size: 13px; line-height: 1.6; }
+.confirmationCheck { display: flex; gap: 9px; align-items: flex-start; margin: 18px 0; color: #31445f; font-size: 13px; }
+.tenantCreateForm { display: grid; grid-template-columns: 1fr 1.4fr auto; align-items: end; gap: 12px; }
+.tenantList { display: grid; }
+.tenantRow { display: grid; grid-template-columns: minmax(220px, 1fr) auto auto; align-items: center; gap: 15px; padding: 15px 0; border-top: 1px solid #edf0f4; }
+.tenantRow:first-child { border-top: 0; }
+.tenantIdentity strong, .tenantIdentity small { display: block; }
+.tenantIdentity small { margin-top: 5px; color: #8493aa; font-size: 11px; }
+.tenantInviteForm { grid-column: 1 / -1; display: flex; align-items: end; gap: 9px; border-radius: 12px; background: #f6f8fb; padding: 12px; }
+.tenantPagination { display: flex; align-items: center; justify-content: center; gap: 14px; margin-top: 18px; }
+.tenantPagination span { min-width: 60px; text-align: center; color: #65758e; font-size: 12px; }
+.invitationNotice { display: grid; gap: 8px; }
+.invitationNotice code { overflow-wrap: anywhere; color: #155d3a; }
+.invitationNotice small { color: #527b64; }
+
 @media (max-width: 1150px) {
   .appGrid, .capabilityGrid, .pluginGrid { grid-template-columns: repeat(2,minmax(0,1fr)); }
 }
@@ -196,6 +266,7 @@ h1 { margin: 5px 0 0; font-size: 30px; }
   .hero { align-items: flex-start; flex-direction: column; }
   .detailLayout { grid-template-columns: 1fr; }
   .configGrid { grid-template-columns: 1fr; }
+  .maintenanceServiceGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .pageItemRow { grid-template-columns: 1fr 1fr 90px; }
   .pageItemIdentity { grid-column: 1 / -1; }
 }
@@ -213,6 +284,11 @@ h1 { margin: 5px 0 0; font-size: 30px; }
   .iframeFrame, .iframeFrame iframe { min-height: 620px; }
   .heroStats { width: 100%; overflow-x: auto; }
   .platformGrid { grid-template-columns: 1fr; }
+  .adminAccessPanel, .maintenanceServiceGrid, .maintenanceRepairGrid, .tenantCreateForm { grid-template-columns: 1fr; }
+  .adminTokenInput, .tenantInviteForm { align-items: stretch; flex-direction: column; }
+  .tenantRow { grid-template-columns: 1fr auto; }
+  .tenantRow > .inlineActions { grid-column: 1 / -1; }
+  .maintenanceAlert { align-items: flex-start; flex-direction: column; }
   .table { overflow-x: auto; }
   .tableRow { min-width: 760px; }
   .dependencyTable { overflow-x: auto; }

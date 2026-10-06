@@ -3,9 +3,10 @@ from __future__ import annotations
 from typing import Any
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, Header, HTTPException, status
 from pydantic import BaseModel, Field
 
+from app.api.routes.platform_connections import require_platform_admin
 from app.domain.applications.registry import ManifestRegistry
 from app.infrastructure.platforms import PlatformServices
 
@@ -58,6 +59,8 @@ def list_capabilities(services: PlatformServices = Depends(get_platform_services
             {
                 **item,
                 "reachable": bool(service_status and service_status.reachable),
+                "supported": item.get("supported", True),
+                "available": bool(service_status and service_status.reachable and item.get("supported", True)),
             }
         )
     return {"data": items}
@@ -68,11 +71,19 @@ def invoke_capability(
     capability: str,
     request: CapabilityInvocationRequest,
     services: PlatformServices = Depends(get_platform_services),
+    x_lyra_admin_token: str | None = Header(default=None),
 ) -> CapabilityInvocationResponse:
     catalog = {item["name"]: item for item in services.capabilities()}
     definition = catalog.get(capability)
     if definition is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Unknown capability")
+    if not definition.get("supported", True):
+        raise HTTPException(
+            status_code=status.HTTP_501_NOT_IMPLEMENTED,
+            detail={"code": "CAPABILITY_NOT_SUPPORTED", "detail": definition["description"]},
+        )
+    if definition.get("mutation", False):
+        require_platform_admin(x_lyra_admin_token)
     try:
         result = services.invoke(capability, request.payload)
     except ValueError as exc:
@@ -124,7 +135,11 @@ def capability_dependencies(
                     "application_name": application.name,
                     "capability": capability,
                     "source": source,
-                    "status": "available" if service_status.get(service_id, False) else "unreachable",
+                    "status": (
+                        "unsupported"
+                        if not definition.get("supported", True)
+                        else "available" if service_status.get(service_id, False) else "unreachable"
+                    ),
                 }
             )
 

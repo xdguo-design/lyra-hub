@@ -119,7 +119,8 @@ def test_page_configuration_controls_order_visibility_roles_and_launch_mode(clie
     assert audit[0]["action"] == "page-config.updated"
 
 
-def test_gateway_and_agent_os_capabilities_are_invoked_through_hub(tmp_path) -> None:
+def test_gateway_and_agent_os_capabilities_are_invoked_through_hub(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("LYRA_HUB_ADMIN_TOKEN", "test-admin-token")
     shared_root = tmp_path / "shared"
     shared_root.mkdir()
     (shared_root / "handoff.md").write_text("shared handoff", encoding="utf-8")
@@ -153,7 +154,8 @@ def test_gateway_and_agent_os_capabilities_are_invoked_through_hub(tmp_path) -> 
                 },
             )
         if host == "print.local" and path == "/api/lyra/capabilities/print.execute":
-            assert request.headers["Authorization"] == "Bearer print-provider-token"
+            assert request.headers["X-Print-Api-Key"] == "print-operator-key"
+            assert request.headers["Idempotency-Key"] == "narrative-demo-1"
             request_body = __import__("json").loads(request.content.decode())
             assert request_body["payload"]["businessKey"] == "demo-1"
             return httpx.Response(
@@ -205,10 +207,12 @@ def test_gateway_and_agent_os_capabilities_are_invoked_through_hub(tmp_path) -> 
     generated = test_client.post(
         "/api/v1/capabilities/model.generate/invoke",
         json={"payload": {"prompt": "hello"}},
+        headers={"X-Lyra-Admin-Token": "test-admin-token"},
     )
     executed = test_client.post(
         "/api/v1/capabilities/agent.run/invoke",
         json={"payload": {"prompt": "do work", "agent_id": "writer"}},
+        headers={"X-Lyra-Admin-Token": "test-admin-token"},
     )
     workflow = test_client.post(
         "/api/v1/capabilities/workflow.run/invoke",
@@ -222,6 +226,7 @@ def test_gateway_and_agent_os_capabilities_are_invoked_through_hub(tmp_path) -> 
                 "steps": [{"id": "write", "agent_id": "writer"}],
             }
         },
+        headers={"X-Lyra-Admin-Token": "test-admin-token"},
     )
     shared_file = test_client.post(
         "/api/v1/capabilities/file.read/invoke",
@@ -232,18 +237,20 @@ def test_gateway_and_agent_os_capabilities_are_invoked_through_hub(tmp_path) -> 
         json={
             "payload": {
                 "kind": "template",
+                "idempotencyKey": "narrative-demo-1",
                 "businessKey": "demo-1",
                 "printerId": "printer-1",
                 "templateCode": "receipt",
                 "inputData": {"name": "Lyra"},
             }
         },
+        headers={"X-Lyra-Admin-Token": "test-admin-token"},
     )
     assert models.json()["result"]["data"][0]["id"] == "auto"
     assert agents.json()["result"]["items"][0]["id"] == "writer"
     assert generated.json()["result"]["choices"][0]["message"]["content"] == "ok"
-    assert executed.json()["result"]["status"] == "succeeded"
-    assert workflow.json()["result"]["status"] == "succeeded"
+    assert executed.status_code == 501
+    assert workflow.status_code == 501
     assert shared_file.json()["result"]["content"] == "shared handoff"
     assert shared_file.json()["result"]["path"] == "handoff.md"
     assert printed.json()["result"]["task"]["id"] == "PT-1"
@@ -252,7 +259,7 @@ def test_gateway_and_agent_os_capabilities_are_invoked_through_hub(tmp_path) -> 
 
     capabilities = test_client.get("/api/v1/capabilities").json()["data"]
     by_capability = {item["name"]: item for item in capabilities}
-    assert by_capability["workflow.run"]["reachable"] is True
+    assert by_capability["workflow.run"]["supported"] is False
     assert by_capability["file.read"]["source"] == "hub"
     assert by_capability["file.read"]["reachable"] is True
     assert by_capability["print.execute"]["source"] == "lyra-print"
@@ -266,9 +273,9 @@ def test_gateway_and_agent_os_capabilities_are_invoked_through_hub(tmp_path) -> 
         for item in items
     }
     assert by_key[("lyra-narrative", "model.generate")]["status"] == "available"
-    assert by_key[("lyra-narrative", "agent.run")]["status"] == "available"
-    assert by_key[("lyra-narrative", "workflow.run")]["status"] == "available"
-    assert by_key[("lyra-print", "workflow.run")]["status"] == "available"
+    assert by_key[("lyra-narrative", "agent.run")]["status"] == "unsupported"
+    assert by_key[("lyra-narrative", "workflow.run")]["status"] == "unsupported"
+    assert by_key[("lyra-print", "workflow.run")]["status"] == "unsupported"
     assert by_key[("lyra-print", "file.read")]["status"] == "available"
     assert by_key[("lyra-narrative", "file.read")]["status"] == "available"
     assert by_key[("hospital-ai", "knowledge.search")]["status"] == "missing"

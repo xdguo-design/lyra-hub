@@ -4,9 +4,11 @@ import {
   AppstoreOutlined,
   DashboardOutlined,
   DeploymentUnitOutlined,
+  BellOutlined,
   SafetyCertificateOutlined,
   SettingOutlined,
   SlidersOutlined,
+  TeamOutlined,
   ThunderboltOutlined,
 } from "@ant-design/icons";
 
@@ -30,6 +32,10 @@ import {
   updatePageConfiguration,
 } from "./api";
 import { buildEmbeddedUrl, isAllowedBridgeOrigin, LYRA_BRIDGE_VERSION } from "./workspace-bridge";
+import { PlatformPage } from "./PlatformPage";
+import { MaintenancePage } from "./MaintenancePage";
+import { TenantsPage } from "./TenantsPage";
+import { WorkRolesPage } from "./WorkRolesPage";
 import type {
   ApplicationDetail,
   ApplicationLaunch,
@@ -47,12 +53,17 @@ type View =
   | "overview"
   | "applications"
   | "application"
+  | "gateway"
+  | "agents"
+  | "work-roles"
   | "embedded"
   | "plugins"
   | "page-config"
   | "capabilities"
   | "permissions"
   | "operations"
+  | "maintenance"
+  | "tenants"
   | "settings";
 
 export function App() {
@@ -80,14 +91,16 @@ export function App() {
   const [capabilityResult, setCapabilityResult] = useState("");
 
   const refreshCore = useCallback(async () => {
-    const [apps, nav, healthy] = await Promise.all([
+    const [apps, nav, healthy, statuses] = await Promise.all([
       listApplications(),
       listNavigation(),
       getHubHealth(),
+      getPlatformStatus(),
     ]);
     setApplications(apps);
     setNavigationApps(nav);
     setHubHealthy(healthy);
+    setPlatformStatus(statuses);
     return apps;
   }, []);
 
@@ -106,6 +119,8 @@ export function App() {
     () => applications.filter((app) => app.enabled).length,
     [applications],
   );
+  const gatewayStatus = platformStatus.find((service) => service.id === "gateway");
+  const agentStatus = platformStatus.find((service) => service.id === "agent-os");
 
   async function openDetail(appId: string) {
     setError("");
@@ -406,6 +421,12 @@ export function App() {
         ? "应用中心"
         : view === "application"
           ? selected?.name ?? "应用详情"
+          : view === "gateway"
+            ? "Gateway"
+            : view === "agents"
+              ? "Agents"
+              : view === "work-roles"
+                ? "工作角色与任务"
           : view === "embedded"
             ? "应用容器"
             : view === "plugins"
@@ -418,6 +439,10 @@ export function App() {
                 ? "用户与权限"
                 : view === "operations"
                   ? "运行与审计"
+                  : view === "maintenance"
+                    ? "平台维护"
+                    : view === "tenants"
+                      ? "Agents 租户"
                   : "设置";
 
   return (
@@ -441,6 +466,9 @@ export function App() {
             label="应用中心"
             onClick={() => setView("applications")}
           />
+          <NavButton active={view === "gateway"} icon={<ThunderboltOutlined />} label="Gateway" onClick={() => setView("gateway")} />
+          <NavButton active={view === "agents"} icon={<DeploymentUnitOutlined />} label="Agents" onClick={() => setView("agents")} />
+          <NavButton active={view === "work-roles"} icon={<TeamOutlined />} label="工作角色与任务" onClick={() => setView("work-roles")} />
           <NavButton
             active={view === "plugins"}
             icon={<AppstoreAddOutlined />}
@@ -470,6 +498,18 @@ export function App() {
             icon={<DeploymentUnitOutlined />}
             label="运行与审计"
             onClick={() => void openOperations()}
+          />
+          <NavButton
+            active={view === "maintenance"}
+            icon={<BellOutlined />}
+            label="平台维护"
+            onClick={() => setView("maintenance")}
+          />
+          <NavButton
+            active={view === "tenants"}
+            icon={<TeamOutlined />}
+            label="Agents 租户"
+            onClick={() => setView("tenants")}
           />
           <NavButton
             active={view === "settings"}
@@ -555,6 +595,12 @@ export function App() {
           </section>
         )}
 
+        {view === "gateway" && <PlatformPage service="gateway" />}
+        {view === "agents" && <PlatformPage service="agent-os" />}
+        {view === "work-roles" && <WorkRolesPage onOpenGateway={() => setView("gateway")} />}
+        {view === "maintenance" && <MaintenancePage />}
+        {view === "tenants" && <TenantsPage />}
+
         {view === "overview" && (
           <>
             <section className="hero">
@@ -602,13 +648,13 @@ export function App() {
             <section className="statusGrid">
               <StatusCard
                 title="Gateway"
-                status="已接入"
-                description="模型、Provider、路由、配额和生成能力由适配器统一调用"
+                status={gatewayStatus ? (gatewayStatus.reachable ? "在线" : "不可达") : "检查中"}
+                description={gatewayStatus?.reachable ? "健康检查正常；模型目录和生成能力请在 Gateway 页面单独核验" : "连接状态来自 Hub 后端的实时健康检查"}
               />
               <StatusCard
                 title="Agent OS"
-                status="已接入"
-                description="Agent 查询与运行能力已通过平台适配器接入"
+                status={agentStatus ? (agentStatus.reachable ? "在线" : "不可达") : "检查中"}
+                description={agentStatus?.reachable ? "注册服务可达；Agent 目录与执行能力状态请在 Agents 页面核验" : "Agent 执行能力尚未发布，不会因服务健康而显示可运行"}
               />
               <StatusCard
                 title="Hub Registry"
@@ -953,15 +999,15 @@ export function App() {
                       </span>
                       <span
                         className={
-                          capability.reachable
+                          capability.available
                             ? "statusText"
                             : "disabledText"
                         }
                       >
-                        {capability.reachable ? "● 可连接" : "● 离线"}
+                        {!capability.supported ? "● 尚未支持" : capability.available ? "● 可用" : "● 离线"}
                       </span>
                     </div>
-                    {(capability.name === "model.list" ||
+                    {capability.available && (capability.name === "model.list" ||
                       capability.name === "agent.list") && (
                       <button
                         className="secondaryButton compactButton"
@@ -1006,7 +1052,7 @@ export function App() {
                       className={
                         item.status === "available"
                           ? "pill goodPill"
-                          : item.status === "unreachable"
+                        : item.status === "unreachable" || item.status === "unsupported"
                             ? "pill"
                             : "pill badPill"
                       }
@@ -1015,6 +1061,8 @@ export function App() {
                         ? "已满足"
                         : item.status === "unreachable"
                           ? "服务不可达"
+                          : item.status === "unsupported"
+                            ? "上游执行接口未发布"
                           : "缺能力"}
                     </span>
                   </div>
@@ -1132,7 +1180,7 @@ export function App() {
               <div>
                 <h3>平台连接设置</h3>
                 <p>
-                  Token 只保存在后端环境变量中，不通过浏览器或 Manifest 暴露。
+                  Gateway 与 Agents 的连接详情、目录、检查、保存和恢复请使用侧边栏专属页面。上游凭据不会返回浏览器。
                 </p>
               </div>
             </div>
@@ -1249,7 +1297,7 @@ function StatusCard({
   status: string;
   description: string;
 }) {
-  const good = status === "正常" || status === "已接入";
+  const good = status === "正常" || status === "已接入" || status === "在线";
   return (
     <article className="statusCard">
       <div>

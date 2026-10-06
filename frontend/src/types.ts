@@ -75,7 +75,7 @@ export type CapabilityDependency = {
   application_name: string;
   capability: string;
   source: string | null;
-  status: "available" | "unreachable" | "missing";
+  status: "available" | "unreachable" | "missing" | "unsupported";
 };
 
 export type CapabilityInfo = {
@@ -84,6 +84,8 @@ export type CapabilityInfo = {
   mutation: boolean;
   description: string;
   reachable: boolean;
+  supported: boolean;
+  available: boolean;
 };
 
 
@@ -106,4 +108,137 @@ export type PluginSummary = {
   contributions: PluginContribution;
   enabled: boolean;
   granted_permissions: string[];
+};
+
+export type MaintenanceServiceId = "hub" | "gateway" | "agents" | "narrative" | "print";
+export type MaintenanceCheckStatus = "unknown" | "healthy" | "empty_catalog" | "unhealthy";
+
+export type MaintenanceCheck = {
+  status: MaintenanceCheckStatus;
+  checked_at: string | null;
+  check_name: string;
+  error_code?: string | null;
+  details?: Record<string, unknown>;
+};
+
+export type MaintenanceService = {
+  status: MaintenanceCheckStatus;
+  checked_at?: string | null;
+  checks: Record<string, MaintenanceCheck>;
+};
+
+export type MaintenanceOverview = {
+  schedule: {
+    interval_seconds: number;
+    enabled: boolean;
+    next_run_at: string | null;
+    last_run_at: string | null;
+  } | null;
+  services: Record<MaintenanceServiceId, MaintenanceService>;
+  open_alerts: number;
+  agents_available: boolean | null;
+};
+
+export type MaintenanceAlert = {
+  id: number;
+  service_id: string;
+  check_name: string;
+  error_code: string;
+  severity: string;
+  status: "open" | "acknowledged" | "resolved";
+  consecutive_failures: number;
+  first_occurred_at: string;
+  last_occurred_at: string;
+  resolved_at?: string | null;
+};
+
+export type MaintenanceCheckResult = {
+  service_id: MaintenanceServiceId;
+  check_name: string;
+  status: MaintenanceCheckStatus;
+  error_code: string | null;
+  details: Record<string, unknown>;
+  duration_ms: number;
+  checked_at?: string;
+};
+
+export type MaintenanceRepairResult = {
+  service_id: "gateway" | "agent-os";
+  action: "restore_last_good";
+  configuration_status: "restored";
+  verification_status: "healthy" | "unhealthy";
+  revision: number;
+  replayed?: boolean;
+};
+
+export type AgentsTenant = {
+  id: string;
+  name: string;
+  active: boolean;
+  created_at: string;
+};
+
+export type AgentsTenantPage = {
+  items: AgentsTenant[];
+  total?: number;
+  limit?: number;
+  offset?: number;
+};
+
+export type AgentsAccessToken = {
+  access_token: string;
+  refresh_token: string;
+  expires_in: number;
+};
+
+export type AgentsPrincipal = {
+  id: string;
+  principal_type: string;
+  tenant_id: string | null;
+  role: string | null;
+  scopes: string[];
+};
+
+export type GovernanceRole = {
+  id: string;
+  name: string;
+  owner: string;
+  description: string;
+  enabled: boolean;
+  lifecycle: "active" | "archived";
+  current_version: string | null;
+  revision: number;
+};
+
+export type RegisteredAgent = {
+  id: string;
+  name: string;
+  owner: string;
+  description: string;
+  enabled: boolean;
+  lifecycle: "active" | "archived";
+  current_version: string | null;
+  revision: number;
+};
+
+export type TenantGatewayConfig = {
+  configured: boolean;
+  key_present: boolean;
+  base_url: string | null;
+  model: string | null;
+  fingerprint?: string | null;
+  updated_at?: string | null;
+};
+
+export type AgentRun = {
+  run_id: string;
+  tenant_id: string;
+  agent_id: string;
+  agent_version: string;
+  status: "queued" | "running" | "succeeded" | "failed" | "cancelled" | "unknown";
+  output: string | null;
+  output_state: string;
+  model: string | null;
+  usage: Record<string, unknown> | null;
+  error: { code: string } | null;
 };

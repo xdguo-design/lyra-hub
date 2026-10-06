@@ -1,427 +1,364 @@
-# Lyra Hub PRD v0.1
+# Lyra Hub 产品需求文档 v0.1
 
-Status: Baseline for review and implementation  
-Date: 2026-09-29  
-Product name: Lyra Hub  
-Chinese positioning: AI 应用中枢
+- 状态：修订版，待评审
+- 初版日期：2026-09-29
+- 更新日期：2026-10-02（Gateway、Agents 页面与首批应用范围）
+- 产品名称：Lyra Hub
+- 中文定位：AI 应用中枢
 
-## 1. Product definition
+本次修订以 Narrative 和 Print 为首批应用，替代原先三个应用同时作为 MVP 验收目标的安排。本文中的 Gateway 指当前由 FreeLLM Gateway 实现的 Lyra Gateway 服务；Agent OS 指 Lyra Agents。两者是平台服务，不作为业务应用通过 App Manifest 注册。
 
-Lyra Hub is the unified application hub for the Lyra AI product family. It connects independently deployed business AI applications into one workspace without forcing them into one monolith.
+## 1. 产品定义
 
-The initial business applications are:
+Lyra Hub 是 Lyra AI 产品家族的统一应用中枢。它将独立部署的业务 AI 应用接入同一个工作空间，同时保持各应用独立运行。
 
-1. Lyra Narrative — novel and content creation.
-2. Lyra Print — printing platform.
-3. Hospital AI — hospital-oriented AI applications.
-4. Future AI business applications.
+首批业务应用：
 
-Lyra Hub is not the model gateway and is not the Agent runtime.
+1. Lyra Narrative：小说与内容创作。
+2. Lyra Print：打印平台。
 
-- Gateway owns model/provider access, routing, quota, cost and usage.
-- Agent OS owns Agents, Skills, Tools, Workflows, Memory, evaluation and execution governance.
-- Lyra Hub owns application registration, app launch, unified workspace, plugin contribution, page configuration and application-level governance.
-- Business applications own their domain behavior, pages and data.
+Hospital AI 及其他业务应用在首批接入得到验证后再接入。
 
-## 2. Core principles
+Hub、Gateway 和 Agent OS 的职责如下：
 
-### 2.1 Independent applications first
+- Gateway 负责模型与 Provider 接入、路由、配额、成本和用量。
+- Agent OS 负责 Agent、Skill、Tool、Workflow、Memory、评估及执行治理。
+- Hub 负责应用注册与启动、统一工作空间、插件贡献、页面配置和应用级治理。
+- 业务应用负责各自的业务逻辑、页面、数据和部署。
 
-Every business application MUST preserve:
+## 2. 核心原则
 
-- independent frontend
-- independent backend
-- independent route system
-- independent database or data boundary
-- independent deployment
-- independent version lifecycle
-- independent standalone entry URL
+### 2.1 应用保持独立
 
-Hub integration is an additional runtime mode.
+每个业务应用必须保留独立的前端、后端、路由系统、数据库或数据边界、部署、版本生命周期和独立访问地址。接入 Hub 是新增的一种运行方式。
 
-### 2.2 Unified entrance, not duplicated pages
+### 2.2 统一入口，不复制业务页面
 
-Lyra Hub MUST NOT require a second copy of Narrative, Printing or Hospital AI pages.
+Hub 不要求复制 Narrative、Print 或未来 Hospital AI 的业务页面。同一应用既能从自己的地址进入，也能从 Hub 进入。
 
-The same business application can be entered from its own URL or from Lyra Hub.
+### 2.3 通过契约共享能力
 
-### 2.3 Capabilities are shared through contracts
+业务应用不得依赖 Gateway 或 Agent OS 的内部源码。共享能力通过稳定契约访问，例如：
 
-Applications MUST NOT depend on internal source code of Gateway or Agent OS.
+- `model.generate`
+- `agent.run`
+- `workflow.run`
+- `knowledge.search`
+- `file.read`
+- `file.write`
+- `image.generate`
+- `event.publish`
+- `notification.send`
 
-Shared access uses a capability contract such as:
+这些名称是契约示例，不代表当前版本的所有上游接口都已可用。实际可用性需在运行时单独判断。
 
-- model.generate
-- agent.run
-- workflow.run
-- knowledge.search
-- file.read
-- file.write
-- image.generate
-- event.publish
-- notification.send
+### 2.4 两级扩展
 
-### 2.4 Two levels of extension
+1. Hub 安装和管理完整的业务应用。
+2. 业务应用可以提供或使用插件、组件及页面贡献。
 
-Level 1: Hub installs and manages Applications.  
-Level 2: An Application can expose or consume Plugins / Widgets / Page contributions.
+## 3. MVP 目标
 
-## 3. Goals
+- 为已安装的业务 AI 应用提供统一工作空间。
+- 提供应用注册、安装、启用、停用、配置和详情页。
+- 支持应用独立启动和 Hub 集成启动。
+- 使用 App Manifest v1 描述应用接入信息。
+- 配置统一导航、页面和菜单可见性。
+- 登记插件及组件贡献。
+- 映射角色与权限，登记共享能力。
+- 提供 Gateway 和 Agents 专属页面，用于配置连接、展示真实状态并调用已支持的接口。
+- 通过 Hub 实时获取 Gateway 模型目录和 Agent OS 的 Agent 目录。
+- 由用户显式发起 Gateway 生成能力检查。
+- 审计应用及配置变更。
+- 提供共享设计令牌和工作空间外壳。
+- 展示应用健康状态与版本。
 
-MVP goals:
+## 4. MVP 暂不包含
 
-- unified workspace for all installed business AI applications
-- application registry
-- install / enable / disable / configure application
-- application detail page
-- application launch in standalone or Hub-integrated mode
-- App Manifest v1
-- unified navigation configuration
-- unified page / menu visibility configuration
-- plugin / widget contribution registry
-- role and permission mapping
-- shared capability registry
-- Gateway and Agent OS connection status
-- audit log for application/configuration changes
-- shared design tokens and shell
-- application health and version overview
+- 面向公众的第三方插件市场。
+- 执行任意不可信插件或在运行时安装未签名代码。
+- 完整的低代码页面搭建器。
+- 将业务数据库迁入 Hub。
+- 立即替换各应用现有的身份认证。
+- 强制所有应用使用同一前端框架或同一仓库。
+- 在 Hub 中重复实现 Gateway 的 Provider／模型管理，或 Agent OS 的 Agent 定义管理。
+- 在 Agent OS 提供受支持的运行接口前，把 Agent 执行显示为可用。
+- 将 Hospital AI 接入作为首版发布验收条件。
 
-## 4. Non-goals for MVP
+## 5. 用户角色
 
-The following are explicitly deferred:
+### 平台管理员
 
-- public third-party plugin marketplace
-- arbitrary untrusted plugin execution
-- runtime installation of unsigned code
-- full low-code page builder
-- moving business databases into Hub
-- replacing each application's own authentication immediately
-- forcing all applications to use one frontend framework
-- forcing all applications into one repository
+可以注册应用，配置应用入口、权限、页面可见性、能力访问和平台连接。只有平台管理员可以修改 Gateway、Agent OS 的连接设置和凭据。
 
-## 5. User roles
+### 应用管理员
 
-### Platform Administrator
+可以管理自己负责的应用在 Hub 中的配置、导航、插件启用状态和角色映射。
 
-Can register applications, configure application entry, manage permissions, page visibility, capability access and platform settings.
+### 开发者
 
-### Application Administrator
+可以验证 Manifest、集成适配器、获准的能力调用和应用健康状态；可以查看平台状态与目录数据。没有平台管理员权限时不能修改平台凭据。
 
-Can manage one application's Hub-facing configuration, navigation, plugin enablement and role mapping.
+### 业务用户
 
-### Developer
+可以从统一工作空间访问获得授权的应用及其页面。
 
-Can validate manifests, integration adapters, capability calls and application health.
+## 6. 信息架构
 
-### Business User
+一级导航：
 
-Can access permitted applications and application pages from the unified workspace.
+- 总览
+- 应用中心
+- 插件中心
+- 页面配置
+- 能力中心
+- Gateway
+- Agents
+- 用户与权限
+- 运行与审计
+- 设置
 
-## 6. Information architecture
+总览展示我的应用、最近使用、应用健康状态、Gateway 状态、Agent OS 状态、待处理事项，以及通往 Gateway 和 Agents 页面的入口。
 
-Primary navigation:
+Gateway 页面展示连接配置、连接与就绪状态、已发现模型、上次刷新时间和显式生成检查。Agents 页面展示连接配置、连接与就绪状态、已发现的 Agent 定义及上次刷新时间。Provider 与模型的深入管理由 Gateway 自己负责；Agent 定义、版本和治理由 Agent OS 自己负责。配置并批准管理后台地址后，Hub 可以提供跳转入口。
 
-- Overview
-- Applications
-- Plugins
-- Page Configuration
-- Capabilities
-- Users & Permissions
-- Operations
-- Settings
+应用中心提供全部、已安装、可用和已停用视图，以及搜索、分类和状态筛选。应用详情包含概览、入口与运行方式、页面、插件、权限、能力、健康与日志、基本设置。
 
-Overview contains:
+## 7. 应用模型
 
-- My Applications
-- Recent Applications
-- Application health
-- Gateway status
-- Agent OS status
-- Alerts / actions requiring attention
+一个 Application 是完整的业务产品。其概念信息至少包括：标识、名称、版本、描述、图标、负责人、分类、独立入口、工作空间入口、集成类型、健康检查地址、权限、消费的能力、提供的能力、页面贡献和插件贡献。
 
-Applications contains:
+## 8. 应用运行方式
 
-- All
-- Installed
-- Available
-- Disabled
-- Search / category / status filtering
+### 独立模式
 
-Application Detail contains:
+用户进入应用自己的地址；应用无需 Hub 也能运行。
 
-- Overview
-- Entry & Runtime
-- Pages
-- Plugins
-- Permissions
-- Capabilities
-- Health & Logs
-- Basic Settings
+### Hub 集成模式
 
-## 7. Application model
+用户从 Hub 进入应用；应用可通过集成适配器接收 Hub 上下文。
 
-An Application is a complete business product.
+MVP 的集成类型：
 
-Required conceptual fields:
+1. `external`：打开应用的独立入口，同时保留 Hub 的注册和深链接上下文。
+2. `iframe`：将独立应用嵌入 Hub，并遵守跨源通信规则。
+3. `remote`：为未来的微前端或原生远程加载预留契约，不属于 MVP 验收范围。
 
-- id
-- name
-- version
-- description
-- icon
-- owner
-- category
-- standalone entry
-- workspace entry
-- integration type
-- health endpoint
-- permissions
-- capabilities consumed
-- capabilities provided
-- page contributions
-- plugin contributions
+集成类型由 App Manifest 声明。
 
-## 8. Application runtime modes
+## 9. Hub 集成适配器
 
-### Standalone mode
+业务应用可以提供一个轻量适配器，仅负责用户与租户上下文、主题和语言、导航与深链接、能力客户端、Hub 事件、页面标题与面包屑、权限检查以及遥测关联 ID。业务逻辑仍由应用自身负责。
 
-The user enters the application's own URL. The application runs without Lyra Hub.
+## 10. 页面配置
 
-### Hub integrated mode
+Hub 的页面配置只管理统一工作空间中的呈现方式，不接管业务应用的内部页面实现。可配置项包括：应用名称覆盖、图标、导航分组与顺序、页面可见性、默认路由、角色可见性、角标、允许范围内的主题令牌覆盖、插槽与组件顺序、默认启动方式。
 
-The user enters from Lyra Hub. The application can receive Hub context through the integration adapter.
+应用可以在 Manifest 中声明内部页面，供 Hub 发现和深链接使用；页面本身仍由应用拥有。
 
-MVP supported integration types:
+## 11. 插件与插槽
 
-1. external — open the standalone app while preserving Hub registry and deep-link context.
-2. iframe — compatible embedded mode for independent applications with cross-origin bridge rules.
-3. remote — reserved contract for future micro-frontend/native remote loading; not required for MVP acceptance.
+插件可贡献组件、操作、导航项、页面、插槽内容或能力适配器。首批标准插槽：
 
-The integration type is declared in App Manifest.
+- `workspace.home.hero.after`
+- `workspace.home.apps.after`
+- `workspace.home.sidebar`
+- `app.detail.actions`
+- `app.detail.sidebar`
+- `app.page.header.after`
 
-## 9. Hub integration adapter
-
-An application may provide a thin Hub adapter. It is responsible only for platform integration:
-
-- current user / tenant context
-- theme and locale
-- navigation/deep-link context
-- capability client
-- Hub events
-- page title / breadcrumb contribution
-- permission checks
-- telemetry correlation id
-
-Business logic remains inside the application.
-
-## 10. Page configuration
-
-Hub page configuration manages shared workspace presentation, not internal business page implementation.
-
-Configurable items:
-
-- application name override
-- icon
-- navigation group
-- navigation order
-- page visibility
-- default route
-- role visibility
-- badge
-- theme token override within allowed scope
-- slot/widget order
-- default launch mode
-
-Application-internal pages can be declared by manifest for discovery and deep-linking but remain application-owned.
-
-## 11. Plugin and slot model
-
-A plugin may contribute:
-
-- widget
-- action
-- navigation item
-- page
-- slot content
-- capability adapter
-
-Initial standard slots:
-
-- workspace.home.hero.after
-- workspace.home.apps.after
-- workspace.home.sidebar
-- app.detail.actions
-- app.detail.sidebar
-- app.page.header.after
-
-Plugins are disabled by default when required permissions are not granted.
+插件所需权限未获授予时，默认停用。
 
 ## 12. App Manifest v1
 
-Manifest v1 is the source of truth for Hub-facing application metadata.
+App Manifest v1 是应用在 Hub 中的元数据来源，契约位于 `contracts/app-manifest.schema.json`。Manifest 校验是应用接入 Hub 的发布门槛。
 
-The contract is stored at contracts/app-manifest.schema.json.
+## 13. 能力注册表
 
-Manifest validation is a release gate for Hub integration.
+Hub 向应用提供统一的逻辑能力注册表。首批能力命名空间包括 `model.*`、`agent.*`、`workflow.*`、`knowledge.*`、`file.*`、`event.*`、`notification.*` 和 `audit.*`。
 
-## 13. Capability registry
+能力可以由 Gateway、Agent OS、Hub 服务或经过批准的外部服务实现。应用通过契约消费能力，不导入其他项目的内部模块。
 
-Hub exposes one logical capability registry to applications.
+## 14. 身份与权限
 
-Initial capability namespaces:
+MVP 权限规则：
 
-- model.*
-- agent.*
-- workflow.*
-- knowledge.*
-- file.*
-- event.*
-- notification.*
-- audit.*
+- Hub 角色映射到应用权限，业务操作最终仍由业务应用授权。
+- Hub 不得默默提升应用权限。
+- 启动上下文只包含经批准的最少用户与租户信息。
+- 页面配置与 Manifest 不暴露任何密钥。
+- 平台连接的读取、修改和手动能力调用需要不同权限，并由 Hub 后端执行检查；隐藏前端按钮不能代替授权。
 
-Implementations may be backed by Gateway, Agent OS, Hub services or an approved external service.
+v0.1 暂不锁定最终 SSO 提供方。集成契约需要为后续短期有效、带签名的启动或会话令牌，以及兼容 OIDC 的身份机制留出空间。
 
-Applications consume a capability by contract rather than by importing another project's internal modules.
+## 15. 安全基线
 
-## 14. Identity and permissions
+- 明确列出允许嵌入的 `iframe` 来源，生产环境设置内容安全策略（CSP）。
+- 集成上下文需要签名。
+- 浏览器不接触 Provider 凭据，App Manifest 不包含应用密钥。
+- 配置变更必须在后端检查权限；安装、启停、配置和权限变更都要审计。
+- 平台连接凭据只保存在服务端，提交后不再返回，并从日志、错误信息、审计载荷和浏览器上下文中排除。
+- 管理员填写的平台地址必须先通过目的地址限制，Hub 才能发起外部请求。
+- 平台连接变更必须可恢复，错误地址或凭据不能导致最后一个可用配置无法找回。
+- 插件必须声明所需权限；MVP 不执行不可信远程代码。
 
-MVP permission model:
+## 16. 可观测性
 
-- Hub roles map to application permissions.
-- Application still owns final authorization for business actions.
-- Hub does not silently elevate application permissions.
-- Launch context contains only the minimum approved identity and tenant metadata.
-- Secrets are never exposed through page configuration or manifest payloads.
+每个已注册应用展示健康状态、版本、最近成功健康检查时间、最近启动时间、可获得的错误率摘要、部署与入口地址元数据、集成方式，以及能力依赖状态。Hub 自身提供 `/health` 与 `/ready`。
 
-The final SSO provider is intentionally not locked in v0.1. The integration contract must support signed short-lived launch/session tokens and standard OIDC-compatible identity in a later phase.
+Gateway 和 Agent OS 的状态分别展示进程可达性、目录接口可访问性、在支持认证时的认证状态、目录数据新鲜度及各项能力的可用性。健康检查成功不能单独得出“已连接且可用”的结论。运行事件记录服务、操作、时间和关联 ID，不记录敏感请求内容或凭据。
 
-## 15. Security baseline
+## 17. 技术基线
 
-- explicit allowlist for iframe origins
-- Content-Security-Policy defined for production
-- signed integration context
-- no provider credentials in browser
-- no application secrets in App Manifest
-- permission check on backend for configuration mutations
-- audit all install/enable/disable/configuration/permission changes
-- plugin permission declaration required
-- untrusted remote code execution is out of MVP scope
+前端：Node.js ≥ 22.12、TypeScript 5.9.x、React 19.1.x、Vite 7.1.x、Ant Design 5.x、pnpm 10.17.x。
 
-## 16. Observability
+后端：Python ≥ 3.11、FastAPI、Pydantic Settings、SQLAlchemy 2.x、Alembic、httpx、pytest 和 Ruff。
 
-Each registered application has:
+具体版本基线见 `docs/architecture/stack-baseline.md`。
 
-- health status
-- version
-- last successful health check
-- last launch
-- error rate summary when available
-- deployment / entry URL metadata
-- integration mode
-- capability dependency status
+## 18. MVP 页面
 
-Hub itself exposes /health and /ready.
+**P0：**工作空间总览、应用中心、应用详情、Gateway 连接与模型页面、Agents 连接与 Agent 目录页面、页面配置、能力中心、用户与权限、运行与健康、设置。
 
-## 17. Technical baseline
+**P1：**插件中心、审计日志详情、Manifest 导入与校验界面、组件与插槽配置。Agent OS 提供并文档化受支持的运行接口后，再支持从 Hub 发起 Agent 调用。
 
-Frontend:
+## 19. 首批接入目标
 
-- Node.js >= 22.12
-- TypeScript 5.9.x
-- React 19.1.x
-- Vite 7.1.x
-- Ant Design 5.x
-- pnpm 10.17.x
+首批应用接入的验收条件是以下两个应用均已注册，并且能从 Hub 启动：
 
-Backend:
+1. Lyra Narrative。
+2. Lyra Print。
 
-- Python >= 3.11
-- FastAPI
-- Pydantic Settings
-- SQLAlchemy 2.x
-- Alembic
-- httpx
-- pytest / Ruff
+应尽量覆盖至少两种前端技术栈，以证明 Hub 不依赖单一应用框架。Hospital AI 是后续接入目标，不阻塞首批里程碑。
 
-Detailed pinned baseline is in docs/architecture/stack-baseline.md.
+## 20. MVP 验收标准
 
-## 18. MVP pages
+满足以下条件时，MVP 方可验收：
 
-P0:
+- 应用脱离 Hub 仍能运行，同一应用也能通过 Manifest 注册到 Hub。
+- Hub 能在不修改业务应用源码的情况下启用或停用应用；停用的应用无法从 Hub 启动。
+- 导航由注册信息和配置生成，角色可见性生效；应用详情展示运行方式、版本和健康信息；页面配置可调整导航顺序与可见性。
+- 平台管理员能在 Hub 中查看、检查、保存和恢复 Gateway、Agent OS 的连接设置，浏览器始终收不到已保存的凭据。
+- Gateway 和 Agents 页面分别展示服务可达性、目录访问、适用时的认证状态和能力可用性；空目录不能误报为连接失败。
+- Hub 能通过后端获取 Gateway 模型目录与 Agent OS 的 Agent 目录；页面具有明确的加载、空、过期和错误状态。
+- 获得授权的用户能显式发起 Gateway 生成检查，并看到结果或可操作的上游错误。
+- Agent OS 尚无受支持的运行契约时，Agent 调用明显标为不可用；不能仅凭健康检查成功就显示为可运行。
+- Narrative 和 Print 展示所声明的 Gateway／Agent OS 能力依赖及其当前可用状态。
+- 所有配置变更留有审计记录；连接变更拒绝覆盖更新版本的并发编辑，不在响应或审计中泄露凭据，并可在变更失败后恢复最近可用配置。
+- 无效 Manifest 校验失败时，给出可操作的错误信息。
+- Narrative 和 Print 的 Manifest 通过校验；两者均可从 Hub 启动，并且脱离 Hub 仍可独立运行。
+- Hub 中声明的 `print.execute` 必须与 Print 实际可调用接口完成跨仓库联调；在此之前应显示为不可用，而不能只依据 Manifest 判定接入成功。
 
-- Workspace Overview
-- Application Center
-- Application Detail
-- Page Configuration
-- Capabilities
-- Users & Permissions
-- Operations / Health
-- Settings
+## 21. 交付顺序
 
-P1:
+1. 阶段 0：契约与原型基线。
+2. 阶段 1：Hub 外壳、注册表与配置存储。
+3. 阶段 2：应用启动与 Manifest 校验。
+4. 阶段 3：平台授权、Gateway／Agents 连接配置、状态与目录接口。
+5. 阶段 4：Gateway 生成检查、能力依赖可视化、页面及插件贡献。
+6. 阶段 5：Narrative 与 Print 接入。
+7. 阶段 6：回归、安全加固与发布。
 
-- Plugin Center
-- Audit log detail
-- manifest import/validation UI
-- widget/slot configuration
+## 22. 已确定与待确定事项
 
-## 19. First integration targets
+**已确定：**
 
-The architecture is considered validated only after these three applications are registered:
+- 项目名称为 Lyra Hub，业务应用保持独立运行。
+- Hub、Agent OS 和 Gateway 是不同的职责层。
+- 前端使用 TypeScript 与 React；后端使用 Python 与 FastAPI；活跃开发分支为 `dev`。
+- 应用注册由 Manifest 驱动；统一页面配置不接管业务应用的页面实现。
+- MVP 不执行任意不可信远程代码。
+- Narrative 和 Print 是首批业务应用；Gateway 和 Agent OS 拥有独立的平台页面。
+- Hub 配置自己与 Gateway、Agent OS 的连接，两项服务自行管理其内部资源和管理界面。
 
-1. Lyra Narrative
-2. Lyra Print
-3. Hospital AI
+**尚未确定：**
 
-At least two different frontend technology stacks SHOULD be represented to prove Hub is not coupled to one application framework.
+- 生产环境身份提供方与关系型数据库选型。
+- 远程微前端的具体实现及商业插件市场模式。
+- Agent OS 运行接口的形式，以及 Hub 发起 Agent 执行的交付时间。
+- 生产环境的平台连接凭据存储及环境配置优先级策略。
 
-## 20. MVP acceptance criteria
+## 23. Gateway 与 Agents 连接页面：2026-10-02 范围补充
 
-MVP is acceptable when:
+### 23.1 问题与预期结果
 
-- an application can run without Hub
-- the same application can be registered in Hub by Manifest
-- Hub can enable/disable the application without modifying application source
-- navigation is generated from registry/configuration
-- role visibility works
-- application detail shows runtime/version/health metadata
-- page configuration can reorder/hide application navigation
-- Hub can call at least one Gateway capability through a platform adapter
-- Hub can call at least one Agent OS capability through a platform adapter
-- all configuration mutations are audited
-- a disabled application cannot be launched from Hub
-- invalid manifests fail validation with actionable errors
-- Narrative, Printing and Hospital AI manifests all pass validation
+目前，运维人员需要通过 Hub 后端的环境配置及各服务自身的界面，才能判断 AI 底座是否可用。Hub 总览还可能在上游不可用时显示固定的“已接入”。Gateway 与 Agents 页面应让管理员在 Hub 中配置连接、查看上游拥有的数据，并判断业务应用依赖的能力是否可用。
 
-## 21. Delivery order
+验收结果是：获得授权的人员能够通过 Hub 完成上述工作；平台凭据不进入浏览器；进程健康不会被误认为业务能力可用。
 
-Phase 0 — contracts and prototype baseline  
-Phase 1 — Hub shell + registry + config storage  
-Phase 2 — application launch + manifest validation  
-Phase 3 — permissions + capability adapters  
-Phase 4 — page/plugin contributions  
-Phase 5 — first three application integrations  
-Phase 6 — regression, security hardening and release
+### 23.2 用户故事与职责边界
 
-## 22. Locked decisions in v0.1
+- 作为平台管理员，我希望设置并验证 Gateway 和 Agent OS 的连接，使 Narrative 和 Print 使用获批准的平台服务。
+- 作为具有读取权限的开发者或运维人员，我希望查看 Gateway 模型、Agent OS 的 Agent、数据更新时间和依赖故障，以便定位集成问题，而不修改上游资源。
+- 作为获授权的运维人员，我希望手动发起一次小规模的 Gateway 生成检查并查看结果，以确认模型调用链路。该操作可能消耗额度或产生费用，页面加载和普通连接检查时不得自动执行。
+- 作为业务用户，当共享能力不可用时，我仍希望进入 Narrative 或 Print，并看到相关能力不可用的状态。业务应用自行负责其内部的降级行为。
 
-Locked:
+Gateway 是 Provider、模型路由、配额、成本与用量的权威来源。Agent OS 是 Agent 定义、版本与治理信息的权威来源。Hub 仅拥有自身的连接配置、状态观测、权限与应用依赖视图，不将上游目录复制成可编辑的应用记录。
 
-- project name: Lyra Hub
-- business applications stay independently runnable
-- Hub, Agent OS and Gateway are separate responsibility layers
-- frontend language: TypeScript
-- Hub frontend framework: React
-- backend language: Python
-- backend framework: FastAPI
-- active development branch: dev
-- manifest-driven application registry
-- unified page configuration does not replace business app page implementation
-- MVP avoids arbitrary untrusted remote code execution
+Hub 只需要用于访问 Gateway 的应用级凭据，以及用于访问 Agent OS 的平台客户端凭据。Gateway 的 Provider 密钥与 Agent 自身的密钥仍由各自服务管理，不在 Hub 中录入。
 
-Not yet locked:
+### 23.3 P0 页面行为
 
-- production identity provider
-- production relational database choice
-- remote micro-frontend implementation
-- commercial plugin marketplace model
+**Gateway 页面**
+
+- 分开展示已配置地址、是否已设置凭据、最近检查时间、服务可达性、模型目录的认证访问状态和生成能力状态。
+- 平台管理员可以编辑连接、先检查草稿配置、保存配置；新配置失效时可恢复最近可用配置。保存的设置在 Hub 重启后仍生效。
+- 列出 Gateway 返回的模型，支持手动刷新，并展示加载中、空目录、错误与上次刷新时间。有效的空目录与鉴权或网络错误必须区分。
+- 提供由用户填写输入并显式触发的生成检查；提示成本与额度影响，限制输入大小，显示结果或可操作的错误。
+
+**Agents 页面**
+
+- 分开展示已配置地址、适用时的凭据状态、最近检查时间、服务可达性和 Agent 目录访问状态。
+- 平台管理员可以按与 Gateway 相同的规则检查、保存和恢复 Agent OS 连接。
+- 列出 Agent OS 返回的 Agent 定义，支持手动刷新，并展示加载中、空目录、错误和上次刷新时间。配置并批准上游管理后台地址后，可提供跳转入口。
+- 根据独立验证的接口状态展示执行与工作流能力。只有注册表接口可用时，不能提供看似可运行的 Agent 操作。
+
+总览和应用详情复用这些实时状态，不写死“已接入”，也不把 Manifest 中声明某项能力等同于该能力已可用。
+
+### 23.4 连接与失败规则
+
+1. 平台管理员提交待检查的地址及可选的新凭据。Hub 先按获批准的目的地址规则校验，再检查草稿连接；检查过程不修改当前生效配置，也不执行模型或 Agent 任务。
+2. Hub 应指出失败发生在哪一环节：目的地址校验、网络或超时、服务健康、认证或目录访问。错误信息不得回显凭据或敏感的上游响应内容。
+3. 保存后，新版本连接才生效。凭据输入留空表示沿用旧凭据；移除凭据必须是单独的明确操作。多人编辑时，不得悄悄覆盖更新版本。
+4. 新配置启用失败时，管理员可以恢复最近可用配置。Hub 记录变更或恢复者、时间、目标服务和验证结果，不记录密钥值。
+5. 服务后来不可用时，之前取得的数据只能在标明“已过期”及最近成功刷新时间的前提下继续展示。新的调用应明确失败，不能把旧数据作为新结果返回。
+6. 生成请求只能由用户显式发起。上游响应允许时，应区分超时、认证失败、模型不可用和配额拒绝；可能产生费用的请求不得自动重试。
+
+环境提供的设置与页面保存的设置必须对每个字段有一条明确的优先级规则。平台管理员应能看见当前生效配置的来源以及是否已设置凭据。面向公众部署并开放写入前，必须确定凭据存储、轮换和恢复策略；浏览器始终不能读取已保存的凭据值。
+
+### 23.5 已核实的上游能力与发布门槛
+
+截至 2026-10-02，Gateway 已提供 P0 页面所需的模型目录与生成接口。Agent OS 已提供健康检查与 Agent 注册表接口，因此 Hub 可检查连接并发现 Agent。不过，Agent OS 当前 HTTP API 尚无完整的用户认证和授权边界，在补齐前部署环境必须对其施加访问保护。
+
+Agents 现提供租户范围内的单 Agent 运行 API：`POST /api/v1/agents/{agent_id}/runs`，使用租户自己的 Gateway Application Key，并要求幂等键。该接口由 Agents 直接提供；Hub 本期不代理 `agent.run`，因此 Hub 的 `agent.run` capability 仍标记为不可用。Agents 尚未提供与 Hub `workflow.run` 对应的受支持执行契约，该能力也不属于 P0 验收承诺。跨仓库验收需覆盖租户隔离、凭据隔离、幂等、Gateway 调用及运行结果留存。
+
+Hub 现已提供 Gateway／Agent OS 连接检查、保存、恢复最近可用配置及清除保存配置的 API；保存的上游凭据以 `LYRA_HUB_SECRET_KEY` 加密，浏览器只会收到凭据是否已设置。连接变更、生成检查和打印执行由 `LYRA_HUB_ADMIN_TOKEN` 保护，并以修订号检测并发覆盖。Hub 页面读取真实目录和检查结果，不用静态状态代替服务响应。当前管理员令牌是部署级共享凭据，不是用户登录或多租户授权系统；公网、多租户发布仍需先确定正式身份与授权方案。
+
+Lyra Print 现提供 `POST /api/lyra/capabilities/print.execute`，以 `Idempotency-Key` 将正式任务创建、排队和请求键记录放在同一事务中；相同请求重放返回原任务，内容不同的重用请求返回冲突。Hub 的 `print.execute` 已切换到该端点。Print 部署启用 API Key RBAC 后，Hub 凭据须具备打印操作权限。Narrative 稿件到打印的业务授权和确认流程仍未完成，不能把该底层端点视为已实现的 Narrative 打印流程。
+
+### 23.6 生产发布前待决策
+
+- 由哪个身份提供方及授权策略保护连接变更和可能产生费用的能力调用？当前 Hub 基线尚无完整的管理员登录流程。
+- Hub 连接凭据保存在哪里，如何轮换、备份和恢复？需与部署环境一致。
+- 各环境允许管理员连接哪些地址，新增目的地址由谁批准？
+- Agent OS 运行接口的受支持契约是什么，何时允许从 Hub 发起执行？在此前，Agent 调用必须明确标记为不可用。
+
+## 24. 四项目独立与组合运行：2026-10-02 接口原则
+
+| 项目 | 独立使用 | 与 Hub／其他项目组合时的职责 | 当前接入缺口 |
+| --- | --- | --- | --- |
+| Gateway | 独立管理 Provider、模型、路由并提供模型 API | 向 Hub、Agents、Narrative 和可选的 Print AI 功能提供受控模型能力 | 各消费方的身份、额度和费用归属需形成统一契约 |
+| Agents | 独立管理 Agent／治理资源，编译 Workflow 预览并按租户运行单 Agent | 向 Hub 提供租户管理和 Agent 目录；业务应用可按租户直接调用 Agents 单 Agent 运行 API | Hub 不代理 `agent.run`；`workflow.run` 的受支持执行 API 尚未发布 |
+| Narrative | 独立完成写作、审稿、批准和版本管理 | 可从 Hub 启动，可选用 Gateway 与未来的共享 Agent 能力 | 浏览器 Bridge 已有握手和调用入口，但业务 AI 路径尚未完成共享能力的端到端接入 |
+| Print | 独立完成模板、预览、任务和物理打印 | 可从 Hub 启动；未来由获授权调用方使用打印能力 | Print 仓库尚无示例 Manifest 声明的 `print.execute` 提供端点 |
+
+组合运行遵守以下产品要求：
+
+1. 任何业务应用的核心页面、业务数据和独立入口都不以 Hub 在线为前提。Gateway 与 Agents 也保留自己的管理入口和数据所有权。
+2. 每个能力明确由谁拥有、由谁授权、采用直连还是 Hub 中转、何处记录额度和费用；同一次调用失败后不能静默改走另一条身份或计费路径。
+3. 应用 Manifest 的声明只是接入意图。Hub 要结合实际上游接口、凭据、权限和健康状态判断可用性，明确区分未实现、未授权、不可达和暂时失败。
+4. 对外接口要有稳定标识、版本兼容政策、输入边界、分页、错误码、关联 ID 和操作审计。可能产生费用或物理副作用的写操作必须有幂等与状态查询机制，不能因超时或响应丢失盲目重试。
+5. 密钥和完整业务内容不经过浏览器 Bridge 或普通平台事件；跨项目传递最少必要上下文和资源引用。业务应用对最终写入、批准或打印操作保留最终授权。
+6. 每条跨项目链路分别验收“各自独立运行”和“组合运行”。实际接口未实现时保留降级状态及待办，不以静态页面或模拟数据代替通过验收。
+
+四个项目的独立需求和具体接入门槛分别见各仓库 2026-10-02 版产品需求文档。目标负载、生产身份、凭据管理和多实例方案尚未确定，不在本版宣称已经具备相应生产容量。

@@ -75,7 +75,10 @@ def test_shared_file_read_rejects_symlink_escape(tmp_path) -> None:
     outside = tmp_path / "outside.txt"
     outside.write_text("secret", encoding="utf-8")
     link = root / "link.txt"
-    link.symlink_to(outside)
+    try:
+        link.symlink_to(outside)
+    except OSError as exc:
+        pytest.skip(f"symlink creation is unavailable in this environment: {exc}")
     adapter = _adapter(root)
 
     with pytest.raises(ValueError, match="escaped the shared root"):

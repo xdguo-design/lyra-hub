@@ -7,12 +7,25 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 
-from app.api.routes import applications, audit, capabilities, events, integration, page_configuration, plugins
+from app.api.routes import (
+    agent_proxy,
+    applications,
+    audit,
+    capabilities,
+    events,
+    integration,
+    maintenance,
+    page_configuration,
+    platform_connections,
+    plugins,
+)
 from app.domain.applications.registry import ManifestRegistry
 from app.domain.plugins.registry import PluginRegistry
+from app.infrastructure.agent_proxy import AgentProxyLimits
 from app.infrastructure.database import Database
 from app.infrastructure.events import EventService, WebhookSecretRegistry
 from app.infrastructure.integration_auth import IntegrationTokenRegistry
+from app.infrastructure.platform_connections import load_saved_settings
 from app.infrastructure.platforms import PlatformServices, PlatformSettings
 
 
@@ -26,19 +39,24 @@ def create_app(
     provider_base_urls: dict[str, str] | None = None,
     webhook_secrets: dict[str, str] | None = None,
     event_transport: httpx.BaseTransport | None = None,
+    agent_proxy_transport: httpx.AsyncBaseTransport | None = None,
+    agent_proxy_timeout_seconds: float | None = None,
 ) -> FastAPI:
     resolved_root = repo_root or Path(__file__).resolve().parents[2]
     registry = ManifestRegistry(resolved_root)
     plugin_registry = PluginRegistry(resolved_root)
     database = Database(database_url)
     database.initialize()
+    environment_platform_settings = platform_settings or PlatformSettings.from_env()
+    effective_platform_settings = load_saved_settings(database, environment_platform_settings)
     platform_services = PlatformServices(
-        platform_settings,
+        effective_platform_settings,
         platform_transport,
         application_registry=registry,
         provider_tokens=provider_tokens,
         provider_base_urls=provider_base_urls,
     )
+    platform_services.environment_settings = environment_platform_settings
     integration_token_registry = (
         IntegrationTokenRegistry(integration_tokens)
         if integration_tokens is not None
@@ -75,6 +93,8 @@ def create_app(
     api.dependency_overrides[page_configuration.get_database] = lambda: database
     api.dependency_overrides[capabilities.get_platform_services] = lambda: platform_services
     api.dependency_overrides[capabilities.get_registry] = lambda: registry
+    api.dependency_overrides[platform_connections.get_database] = lambda: database
+    api.dependency_overrides[platform_connections.get_platform_services] = lambda: platform_services
     api.dependency_overrides[plugins.get_registry] = lambda: plugin_registry
     api.dependency_overrides[plugins.get_database] = lambda: database
     api.dependency_overrides[integration.get_registry] = lambda: registry
@@ -83,6 +103,13 @@ def create_app(
     api.dependency_overrides[integration.get_token_registry] = lambda: integration_token_registry
     api.dependency_overrides[integration.get_event_service] = lambda: event_service
     api.dependency_overrides[events.get_event_service] = lambda: event_service
+    api.dependency_overrides[maintenance.get_database] = lambda: database
+    api.dependency_overrides[maintenance.get_platform_services] = lambda: platform_services
+    api.dependency_overrides[agent_proxy.get_platform_services] = lambda: platform_services
+    api.state.agent_proxy_transport = agent_proxy_transport
+    api.state.agent_proxy_limits = AgentProxyLimits(
+        timeout_seconds=agent_proxy_timeout_seconds or effective_platform_settings.timeout_seconds
+    )
 
     @api.get("/health", tags=["system"])
     def health() -> dict[str, str]:
@@ -102,10 +129,13 @@ def create_app(
     api.include_router(applications.router, prefix="/api/v1")
     api.include_router(page_configuration.router, prefix="/api/v1")
     api.include_router(capabilities.router, prefix="/api/v1")
+    api.include_router(platform_connections.router, prefix="/api/v1")
     api.include_router(audit.router, prefix="/api/v1")
     api.include_router(plugins.router, prefix="/api/v1")
     api.include_router(integration.router, prefix="/api/v1")
     api.include_router(events.router, prefix="/api/v1")
+    api.include_router(maintenance.router, prefix="/api/v1")
+    api.include_router(agent_proxy.router, prefix="/api/v1")
     return api
 
 

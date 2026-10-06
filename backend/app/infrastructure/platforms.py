@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import os
+import random
+import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -12,12 +16,14 @@ import httpx
 
 @dataclass(frozen=True)
 class PlatformSettings:
+    hub_url: str = "http://127.0.0.1:8000"
     gateway_url: str = "http://127.0.0.1:8765"
     gateway_token: str = ""
     agent_os_url: str = "http://127.0.0.1:8770"
     agent_os_token: str = ""
     agent_runtime_token: str = ""
     print_url: str = "http://127.0.0.1:8080"
+    narrative_url: str = "http://127.0.0.1:8001"
     print_api_key: str = ""
     shared_files_root: str = ""
     shared_file_max_bytes: int = 1048576
@@ -26,12 +32,14 @@ class PlatformSettings:
     @classmethod
     def from_env(cls) -> PlatformSettings:
         return cls(
+            hub_url=os.getenv("LYRA_HUB_URL", cls.hub_url).rstrip("/"),
             gateway_url=os.getenv("LYRA_GATEWAY_URL", cls.gateway_url).rstrip("/"),
             gateway_token=os.getenv("LYRA_GATEWAY_TOKEN", ""),
             agent_os_url=os.getenv("LYRA_AGENT_OS_URL", cls.agent_os_url).rstrip("/"),
             agent_os_token=os.getenv("LYRA_AGENT_OS_TOKEN", ""),
             agent_runtime_token=os.getenv("LYRA_AGENT_RUNTIME_TOKEN", ""),
             print_url=os.getenv("LYRA_PRINT_URL", cls.print_url).rstrip("/"),
+            narrative_url=os.getenv("LYRA_NARRATIVE_URL", cls.narrative_url).rstrip("/"),
             print_api_key=os.getenv("LYRA_PRINT_API_KEY", ""),
             shared_files_root=os.getenv("LYRA_SHARED_FILES_ROOT", ""),
             shared_file_max_bytes=int(
@@ -48,6 +56,302 @@ class ServiceStatus:
     base_url: str
     reachable: bool
     detail: str | dict[str, Any]
+
+
+@dataclass(frozen=True)
+class MaintenanceCheckResult:
+    service_id: str
+    check_name: str
+    status: str
+    error_code: str | None = None
+    details: dict[str, Any] | None = None
+    duration_ms: int = 0
+
+
+class _SharedAsyncTransport(httpx.AsyncBaseTransport):
+    """Reuse an injected async transport without closing it per request."""
+
+    def __init__(self, transport: httpx.AsyncBaseTransport) -> None:
+        self.transport = transport
+
+    async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
+        return await self.transport.handle_async_request(request)
+
+    async def aclose(self) -> None:
+        return None
+
+
+class MaintenanceChecks:
+    """Read-only health and catalog probes for the five Lyra platform services."""
+
+    def __init__(
+        self,
+        settings: PlatformSettings | None = None,
+        *,
+        async_transport: httpx.AsyncBaseTransport | None = None,
+        timeout_seconds: float = 3.0,
+        max_concurrency: int = 2,
+        jitter_seconds: float = 0.25,
+        retries: int = 1,
+        max_response_bytes: int = 262144,
+        read_poll_seconds: float = 1.0,
+    ) -> None:
+        self.settings = settings or PlatformSettings.from_env()
+        self.async_transport = (
+            _SharedAsyncTransport(async_transport) if async_transport is not None else None
+        )
+        self.timeout_seconds = min(max(timeout_seconds, 0.1), 10.0)
+        self.max_concurrency = min(max(max_concurrency, 1), 5)
+        self.jitter_seconds = max(0.0, jitter_seconds)
+        self.retries = min(max(retries, 0), 2)
+        if max_response_bytes < 1 or read_poll_seconds <= 0:
+            raise ValueError("max_response_bytes and read_poll_seconds must be positive")
+        self.max_response_bytes = max_response_bytes
+        self.read_poll_seconds = min(read_poll_seconds, self.timeout_seconds)
+
+    @property
+    def max_run_seconds(self) -> float:
+        # The absolute asyncio deadline covers connect, headers and body. Count
+        # Hub=2, Gateway=2, Agents=2, Narrative=1, Print=2 logical requests.
+        request_count = 9
+        per_request = (self.timeout_seconds + self.read_poll_seconds) * (self.retries + 1)
+        retry_jitter = min(self.jitter_seconds, 0.1) * self.retries
+        waves = (request_count + self.max_concurrency - 1) // self.max_concurrency
+        return waves * (per_request + retry_jitter) + self.jitter_seconds
+
+    def run_all(self) -> list[MaintenanceCheckResult]:
+        return asyncio.run(self._run_all_async())
+
+    async def _run_all_async(self) -> list[MaintenanceCheckResult]:
+        probes: tuple[Callable[[], Any], ...] = (
+            self._hub,
+            self._gateway,
+            self._agents,
+            self._narrative,
+            self._print,
+        )
+        self._request_semaphore = asyncio.Semaphore(self.max_concurrency)
+
+        async def run_probe(probe: Callable[[], Any]) -> list[MaintenanceCheckResult]:
+            name = getattr(probe, "__name__", "service")
+            service_id = name.removeprefix("_")
+            try:
+                if self.jitter_seconds:
+                    await asyncio.sleep(random.uniform(0, self.jitter_seconds))
+                return await probe()
+            except Exception:
+                return [self._result(service_id, f"{service_id}.health", "unhealthy", "CHECK_ERROR")]
+
+        batches = await asyncio.gather(*(run_probe(probe) for probe in probes))
+        return [result for batch in batches for result in batch]
+
+    async def _http_check(
+        self,
+        service_id: str,
+        check_name: str,
+        base_url: str,
+        path: str,
+        *,
+        headers: dict[str, str] | None = None,
+        expect_catalog: bool = False,
+    ) -> MaintenanceCheckResult:
+        started = time.monotonic()
+        last_result: MaintenanceCheckResult | None = None
+        for attempt in range(self.retries + 1):
+            try:
+                last_result, retryable = await self._request_once(
+                    service_id,
+                    check_name,
+                    base_url,
+                    path,
+                    headers=headers,
+                    expect_catalog=expect_catalog,
+                )
+                if not retryable or attempt >= self.retries:
+                    break
+            except (TimeoutError, httpx.TimeoutException):
+                last_result = self._result(service_id, check_name, "unhealthy", "TIMEOUT")
+                retryable = True
+            except httpx.HTTPError:
+                last_result = self._result(service_id, check_name, "unhealthy", "UPSTREAM_ERROR")
+                retryable = True
+            if retryable and attempt < self.retries and self.jitter_seconds:
+                await asyncio.sleep(random.uniform(0, min(self.jitter_seconds, 0.1)))
+        assert last_result is not None
+        return MaintenanceCheckResult(
+            last_result.service_id,
+            last_result.check_name,
+            last_result.status,
+            last_result.error_code,
+            last_result.details,
+            int((time.monotonic() - started) * 1000),
+        )
+
+    async def _request_once(
+        self,
+        service_id: str,
+        check_name: str,
+        base_url: str,
+        path: str,
+        *,
+        headers: dict[str, str] | None,
+        expect_catalog: bool,
+    ) -> tuple[MaintenanceCheckResult, bool]:
+        loop = asyncio.get_running_loop()
+        timeout = httpx.Timeout(self.timeout_seconds, read=self.read_poll_seconds)
+        request_headers = {"Accept-Encoding": "identity", **(headers or {})}
+        async with self._request_semaphore:
+            # Start deadline after the bounded concurrency queue so queuing is
+            # accounted as another request wave in max_run_seconds.
+            deadline = loop.time() + self.timeout_seconds
+            async with asyncio.timeout_at(deadline):
+                async with httpx.AsyncClient(
+                    base_url=base_url.rstrip("/"),
+                    timeout=timeout,
+                    transport=self.async_transport,
+                    follow_redirects=False,
+                ) as client:
+                    async with client.stream("GET", path, headers=request_headers) as response:
+                        if response.status_code in {401, 403}:
+                            return self._result(service_id, check_name, "unhealthy", "UNAUTHORIZED"), False
+                        if not 200 <= response.status_code < 300:
+                            return (
+                                self._result(
+                                    service_id,
+                                    check_name,
+                                    "unhealthy",
+                                    "UPSTREAM_ERROR",
+                                    {"http_status": response.status_code},
+                                ),
+                                response.status_code == 429 or response.status_code >= 500,
+                            )
+
+                        content_encoding = response.headers.get("content-encoding", "identity").strip().lower()
+                        if content_encoding not in {"", "identity"}:
+                            return (
+                                self._result(service_id, check_name, "unhealthy", "UNSUPPORTED_CONTENT_ENCODING"),
+                                False,
+                            )
+                        content_length = response.headers.get("content-length")
+                        if content_length is not None:
+                            try:
+                                if int(content_length) > self.max_response_bytes:
+                                    return (
+                                        self._result(service_id, check_name, "unhealthy", "RESPONSE_TOO_LARGE"),
+                                        False,
+                                    )
+                            except ValueError:
+                                pass
+
+                        body = bytearray()
+                        async for chunk in response.aiter_raw():
+                            if len(body) + len(chunk) > self.max_response_bytes:
+                                return (
+                                    self._result(service_id, check_name, "unhealthy", "RESPONSE_TOO_LARGE"),
+                                    False,
+                                )
+                            body.extend(chunk)
+                        if not body:
+                            return self._result(service_id, check_name, "unhealthy", "INVALID_RESPONSE"), False
+                        try:
+                            payload = json.loads(body)
+                        except (ValueError, json.JSONDecodeError):
+                            return self._result(service_id, check_name, "unhealthy", "INVALID_RESPONSE"), False
+
+                        if not isinstance(payload, (dict, list)):
+                            return self._result(service_id, check_name, "unhealthy", "INVALID_RESPONSE"), False
+                        if expect_catalog:
+                            entries = self._catalog_entries(payload)
+                            status = "healthy" if entries else "empty_catalog"
+                            return (
+                                self._result(
+                                    service_id,
+                                    check_name,
+                                    status,
+                                    "EMPTY_CATALOG" if not entries else None,
+                                    {"count": len(entries)},
+                                ),
+                                False,
+                            )
+                        if not isinstance(payload, dict):
+                            return self._result(service_id, check_name, "unhealthy", "INVALID_RESPONSE"), False
+                        status_value = payload.get("status")
+                        ok_value = payload.get("ok")
+                        if not isinstance(status_value, str) and not isinstance(ok_value, bool):
+                            return self._result(service_id, check_name, "unhealthy", "INVALID_RESPONSE"), False
+                        reachable = (
+                            status_value.lower() in {"ok", "up", "healthy", "ready"}
+                            if isinstance(status_value, str)
+                            else ok_value is True
+                        )
+                        safe_details = {
+                            key: value
+                            for key, value in payload.items()
+                            if key in {"status", "ok", "service", "version", "registered_applications", "registered_plugins"}
+                            and isinstance(value, (str, int, float, bool))
+                        }
+                        return (
+                            self._result(
+                                service_id,
+                                check_name,
+                                "healthy" if reachable else "unhealthy",
+                                None if reachable else "NOT_READY",
+                                safe_details,
+                            ),
+                            False,
+                        )
+
+    @staticmethod
+    def _catalog_entries(body: dict[str, Any] | list[Any]) -> list[Any]:
+        if isinstance(body, list):
+            return body
+        entries = body.get("data", body.get("items", body.get("models", body.get("agents", []))))
+        if isinstance(entries, dict):
+            return list(entries.values())
+        return entries if isinstance(entries, list) else []
+
+    def _result(
+        self,
+        service_id: str,
+        check_name: str,
+        status: str,
+        error_code: str | None = None,
+        details: dict[str, Any] | None = None,
+    ) -> MaintenanceCheckResult:
+        return MaintenanceCheckResult(service_id, check_name, status, error_code, details)
+
+    async def _hub(self) -> list[MaintenanceCheckResult]:
+        return await asyncio.gather(
+            self._http_check("hub", "hub.health", self.settings.hub_url, "/health"),
+            self._http_check("hub", "hub.readiness", self.settings.hub_url, "/ready"),
+        )
+
+    async def _gateway(self) -> list[MaintenanceCheckResult]:
+        headers = {"X-Free-LLM-Token": self.settings.gateway_token} if self.settings.gateway_token else None
+        return await asyncio.gather(
+            self._http_check("gateway", "gateway.health", self.settings.gateway_url, "/health"),
+            self._http_check(
+                "gateway", "gateway.models", self.settings.gateway_url, "/v1/models", headers=headers, expect_catalog=True
+            ),
+        )
+
+    async def _agents(self) -> list[MaintenanceCheckResult]:
+        headers = {"Authorization": f"Bearer {self.settings.agent_os_token}"} if self.settings.agent_os_token else None
+        return await asyncio.gather(
+            self._http_check("agents", "agents.health", self.settings.agent_os_url, "/health"),
+                self._http_check(
+                "agents", "agents.directory", self.settings.agent_os_url, "/api/v1/platform/tenants", headers=headers, expect_catalog=True
+            ),
+        )
+
+    async def _narrative(self) -> list[MaintenanceCheckResult]:
+        return [await self._http_check("narrative", "narrative.health", self.settings.narrative_url, "/api/health")]
+
+    async def _print(self) -> list[MaintenanceCheckResult]:
+        first = await self._http_check("print", "print.health", self.settings.print_url, "/health")
+        if first.error_code == "UPSTREAM_ERROR" and (first.details or {}).get("http_status") in {404, 405}:
+            first = await self._http_check("print", "print.health", self.settings.print_url, "/actuator/health")
+        return [first]
 
 
 class GatewayAdapter:
@@ -178,26 +482,22 @@ class PrintAdapter:
 
     def execute(self, payload: dict[str, Any]) -> dict[str, Any]:
         request_payload = dict(payload)
+        idempotency_key = str(request_payload.pop("idempotencyKey", "")).strip()
+        if not idempotency_key:
+            raise ValueError("print.execute requires an 'idempotencyKey'")
         kind = str(request_payload.pop("kind", "template")).strip().lower()
-        should_queue = bool(request_payload.pop("queue", True))
-        paths = {
-            "template": "/api/print-tasks",
-            "pdf": "/api/print-tasks/pdf",
-            "raw": "/api/print-tasks/raw",
-        }
-        path = paths.get(kind)
-        if path is None:
+        if kind not in {"template", "pdf", "raw"}:
             raise ValueError("print.execute kind must be one of: template, pdf, raw")
-
-        created = self._request("POST", path, json=request_payload)
-        if not should_queue:
-            return {"task": created, "queued": False}
-
-        task_id = str(created.get("id", "")).strip()
-        if not task_id:
-            raise ValueError("Lyra Print did not return a task id")
-        queued = self._request("POST", f"/api/print-tasks/{task_id}/queue")
-        return {"task": created, "queued": True, "queue_result": queued}
+        envelope = self._request(
+            "POST",
+            "/api/lyra/capabilities/print.execute",
+            headers={"Idempotency-Key": idempotency_key},
+            json={"payload": {**request_payload, "kind": kind}},
+        )
+        result = envelope.get("result", envelope)
+        if not isinstance(result, dict) or not isinstance(result.get("task"), dict):
+            raise ValueError("Lyra Print returned an invalid capability result")
+        return result
 
     def _request(self, method: str, path: str, **kwargs: Any) -> dict[str, Any]:
         with httpx.Client(
@@ -205,7 +505,8 @@ class PrintAdapter:
             timeout=self.settings.timeout_seconds,
             transport=self.transport,
         ) as client:
-            response = client.request(method, path, headers=self._headers(), **kwargs)
+            headers = {**self._headers(), **kwargs.pop("headers", {})}
+            response = client.request(method, path, headers=headers, **kwargs)
             response.raise_for_status()
             body = response.json()
         if not isinstance(body, dict):
@@ -471,7 +772,7 @@ class SharedFilesAdapter:
 
         data = candidate.read_bytes()
         try:
-            text = data.decode("utf-8")
+            text = data.decode("utf-8").replace("\r\n", "\n").replace("\r", "\n")
         except UnicodeDecodeError as exc:
             raise ValueError("file.read supports UTF-8 text files only") from exc
 
@@ -495,29 +796,40 @@ class PlatformServices:
         provider_base_urls: dict[str, str] | None = None,
     ) -> None:
         self.settings = settings or PlatformSettings.from_env()
-        self.gateway = GatewayAdapter(self.settings, transport)
-        self.agent_os = AgentOSAdapter(self.settings, transport)
-        self.print = PrintAdapter(self.settings, transport)
+        self.transport = transport
+        self.application_registry = application_registry
+        self.provider_tokens = provider_tokens
+        self.provider_base_urls = provider_base_urls
+        self._configure_adapters()
+
+    def _configure_adapters(self) -> None:
+        self.gateway = GatewayAdapter(self.settings, self.transport)
+        self.agent_os = AgentOSAdapter(self.settings, self.transport)
+        self.print = PrintAdapter(self.settings, self.transport)
         self.shared_files = SharedFilesAdapter(self.settings)
         self.application_providers = (
             ApplicationProviderAdapter(
-                application_registry,
+                self.application_registry,
                 tokens=(
-                    provider_tokens
-                    if provider_tokens is not None
+                    self.provider_tokens
+                    if self.provider_tokens is not None
                     else ApplicationProviderAdapter.tokens_from_env()
                 ),
                 base_urls=(
-                    provider_base_urls
-                    if provider_base_urls is not None
+                    self.provider_base_urls
+                    if self.provider_base_urls is not None
                     else ApplicationProviderAdapter.base_urls_from_env()
                 ),
-                transport=transport,
+                transport=self.transport,
                 timeout_seconds=self.settings.timeout_seconds,
             )
-            if application_registry is not None
+            if self.application_registry is not None
             else None
         )
+
+    def configure(self, settings: PlatformSettings) -> None:
+        self.settings = settings
+        self._configure_adapters()
 
     def status(self) -> list[ServiceStatus]:
         statuses = [
@@ -544,6 +856,7 @@ class PlatformServices:
                 "source": "gateway",
                 "service_id": "gateway",
                 "mutation": True,
+                "supported": True,
                 "description": "Generate through Gateway routing",
             },
             {
@@ -558,13 +871,15 @@ class PlatformServices:
                 "source": "agent-os",
                 "service_id": "agent-os",
                 "mutation": True,
-                "description": "Execute an Agent OS runtime turn",
+                "supported": False,
+                "description": "Unavailable through Hub: use the tenant-scoped Agents run API directly",
             },
             {
                 "name": "workflow.compile",
                 "source": "agent-os",
                 "service_id": "agent-os",
                 "mutation": False,
+                "supported": True,
                 "description": "Compile-preview an Agent OS workflow",
             },
             {
@@ -572,7 +887,8 @@ class PlatformServices:
                 "source": "agent-os",
                 "service_id": "agent-os",
                 "mutation": True,
-                "description": "Compile and execute an Agent OS workflow",
+                "supported": False,
+                "description": "Unavailable: Agent OS does not publish a supported workflow execution API",
             },
             {
                 "name": "print.execute",
@@ -592,11 +908,16 @@ class PlatformServices:
         by_name = {item["name"]: item for item in platform_items}
         if self.application_providers is not None:
             for item in self.application_providers.definitions():
-                by_name[item["name"]] = item
+                if item["name"] not in by_name:
+                    by_name[item["name"]] = item
         return list(by_name.values())
 
     def invoke(self, capability: str, payload: dict[str, Any]) -> dict[str, Any]:
-        if self.application_providers is not None:
+        native_capabilities = {
+            "model.list", "model.generate", "agent.list", "agent.run",
+            "workflow.compile", "workflow.run", "print.execute", "file.read",
+        }
+        if self.application_providers is not None and capability not in native_capabilities:
             provider_definitions = {
                 item["name"]: item
                 for item in self.application_providers.definitions()
